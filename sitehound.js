@@ -1,0 +1,489 @@
+//
+// Website event and user tracking for Segment.com's analytics.js
+// 
+// @author        Andy Young | @andyy | andy@apexa.co.uk
+// @version       1.0 - 23rd March 2016
+// @licence       GNU GPL v3
+//
+// ~~ 500 Startups Distro Team | #500STRONG | 500.co ~~
+//
+//
+//  Copyright (C) 2016  Andy Young
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+!function() {
+    var VERSION = "0.1";
+
+    var analytics = window.analytics = window.analytics || [];
+    if (typeof analytics.ready === 'undefined') {
+        if (window.console && console.error) {
+            console.error('SiteHound: window.analytics is not initialized - ensure analytics.js snippet is included first');
+        }
+        return;
+    }
+
+    // initialize when analytics.js is ready
+    analytics.ready(function() {
+        // grab our custom config and calls, if any
+        var initialConfig = window.sitehound || {};
+        // initialize SiteHound library, passing in our custom config
+        var sitehound = new SiteHound(initialConfig);
+        // finally, replace the global sitehound var with our instance for future reference
+        window.sitehound = sitehound;
+    });
+
+    function SiteHound(initialConfig) {
+        var self = this;
+
+        var config = {
+            // names and paths of key pages we want to track
+            // paths can be simple string mathches, arrays, or regular expressions        
+            trackPages: null,
+            // whitelist domains on which to run tracking
+            domains: location.host,
+            domainsIgnore: ['localhost'],
+            domainsIgnoreIPAddress: true,
+            domainsIgnoreSubdomains: ['staging', 'test'],
+            // any un-tagged pages we want to track as the actual landing page if discovered in the referrer?
+            trackReferrerLandingPages: [],
+            page: null,
+            pageTraits: {},
+            // traits to set globally for this user/session
+            globalTraits: {},
+            // traits that we only want to pass on calls to analytics.[track|page] on this pageview
+            thisPageTraits: {},
+            //
+            userId: null,
+            userTraits: {},
+            detectLogout: false,
+            //
+            logToConsole: true
+        };
+
+        for (var key in config) {
+            if (initialConfig[key] !== undefined) {
+                config[key] = initialConfig[key];
+            }
+            this[key] = config[key];
+        }
+
+        this.VERSION = VERSION;
+
+        //
+        // privileged methods
+        //
+
+        this.done = function() {
+            try {
+                self.info('Running..');
+
+                // check we want to track this host
+                if (ignoreHost(location.host)) {
+                    self.info('Ignoring host: ' + location.host);
+                    return;
+                }
+
+                if (!self.page) {
+                    detectPage();
+                }
+
+                self.detectLandingPage();
+
+                var user = analytics.user();
+                var userTraits = user.traits();
+                if (userTraits.createdAt) {
+                    self.globalTraits['Days since signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
+                    self.info('Days since signup: ' + self.globalTraits['Days since signup']);
+                }
+
+                // Fullstory.com session URL
+                if (window.FS && window.FS.getCurrentSessionURL) {
+                    // ideally do it instantly so we don't trigger a separate identify() call
+                    self.globalTraits['Fullstory URL'] = FS.getCurrentSessionURL();
+                } else {
+                    window['_fs_ready'] = function() {
+                        analytics.identify({'Fullstory URL': FS.getCurrentSessionURL()});
+                    };
+                }
+
+                if (self.userId) {
+                    var userTraits = {};
+                    for (var key in self.userTraits) {
+                        userTraits['User ' + key] = self.userTraits[key];
+                    }
+                    var traits = mergeObjects(self.globalTraits, userTraits);
+                    var currentUserId;
+                    if (!analytics.user() || !analytics.user().id()) {
+                        // session up to here has been anonymous
+                        analytics.alias(userId);
+                    } else {
+                        currentUserId = analytics.user().id();
+                    }
+                    analytics.identify(userId, traits);
+                    if (userId !== currentUserId) {
+                        self.track('Login');
+                        // set time of email verification as the user creation time
+                        self.identifyOnce({createdAt: new Date().toISOString()});
+                    }
+                } else {
+                    analytics.identify(self.globalTraits);
+                    if (self.detectLogout) {
+                        if (analytics.user() && analytics.user().id()) {
+                            // TODO: track only once until next login
+                            self.track('Logged out');
+                            // analytics.reset();
+                        }
+                    }
+                }
+
+                if (self.isLandingPage) {
+                    self.trackLandingPage();
+                }
+
+                if (self.page) {
+                    // if the page contains a vertical bar, separate out the page vs. category
+                    var pageParts = self.page.split('|', 2).map(
+                        function(a) {
+                            return a.trim();
+                        }
+                    );
+                    var args = pageParts.push(self.pageTraits);
+                    // track page view
+                    self.trackPage.apply(self, pageParts);
+                }
+
+                // finally - track all custom events etc
+                replayQueue();
+
+            } catch(error) {
+                this.trackError(error);
+                throw error;
+            }
+        }
+
+        // is this a landing page hit? (i.e. first pageview in session)
+        this.detectLandingPage = function() {
+            self.isLandingPage = false;
+
+            if (getCookie('had_first_pageview') == '') {
+                self.isLandingPage = true;
+                setCookie('had_first_pageview', '1');
+                self.info('Detected landing page');
+
+                var sessionCount = parseInt(getCookie('sessionCount') || 0) + 1;
+                self.globalTraits['Session count'] = sessionCount;
+                setCookie('sessionCount', sessionCount, 366);
+                self.info('Session count: ' + sessionCount);
+
+                // record first + last touch UTM params
+                var utm_params = getUTMParams();
+                if (Object.keys(utm_params).length > 0) {
+                    var utm_params_first = {},
+                        utm_params_last = {};
+
+                    self.info('utm params:');
+                    self.info(utm_params);
+
+                    for (var index in utm_params) {
+                        utm_params_first[utm_params[index] + ' [first touch]'] = utm_params[index];
+                        utm_params_last[utm_params[index]+ ' [last touch]'] = utm_params[index];
+                    }
+
+                    // TODO: limit identify calls
+                    self.identifyOnce(utm_params.utm_params_first);
+                    analytics.identify(utm_params_last);
+                }
+            }
+        }
+
+        this.trackLandingPage = function() {
+            // track landing page event, identifying any special cases if applicable
+            var referrer_host = document.referrer.match(/https?:\/\/([^/]+)\//);
+            if (referrer_host) {
+                referrer_host = referrer_host[1];
+            }
+            // is the referrer from a host we should have (a) tracking on, and (b) set a cookie for, AND can read the cookie on this host?
+            //  => referrer is one of domains AND current host is either the same domain as the referrer, or current host is a subdomain of the referrer
+            if ((referrer_host === location.host) || (self.domains.includes(referrer_host) && (location.host + '/').includes(referrer_host + '/'))) {
+                // first cookie, but referrer from one of our domains - did the original landing page not have tracking?
+                // Do we want to track the referrer as the original landing page?
+                var referrer_path = document.referrer.replace(/https?:\/\/[^/]+\//, '/');
+                if (self.trackReferrerLandingPages.includes(referrer_path)) {
+                    self.info('Detected known untracked landing page: ' + document.referrer);
+                    // track landing page view for our previously untracked referrer
+                    self.trackPage('Landing', {
+                        path: referrer_path,
+                        url: document.referrer,
+                        '$current_url': document.referrer,
+                        'Tracked from URL': location.href,
+                        referrer: ''
+                    });
+                } else {
+                    self.trackDebugWarn('Landing page with local referrer - tracking code not on all pages?');
+                }
+            } else {
+                if ((referrer_host != location.host) && self.domains.includes(referrer_host)) {
+                    self.trackDebugInfo('Landing page with referrer from one of our other domains');
+                } else {
+                    self.trackPage('Landing');
+                }
+            }
+        }
+
+        this.trackPage = function(one, two, three) {
+            if (typeof three === 'object') {
+                analytics.page(one, two, self.getTraitsToSend(three));          
+            } else if (typeof two === 'object') {
+                analytics.page(one, self.getTraitsToSend(two));
+            } else if (two) {
+                analytics.page(one, two, self.getTraitsToSend());
+            } else {
+                analytics.page(one, self.getTraitsToSend());
+            }
+        }
+
+        this.getTraitsToSend = function(traits) {
+            if (typeof traits === 'object') {
+                return mergeObjects(self.thisPageTraits, traits);
+            } else {
+                return self.thisPageTraits;
+            }
+        }
+
+        this.info = function(message) {
+            if (self.logToConsole && window.console && console.log) {
+                if (typeof message === 'object') {
+                    console.log(message);
+                } else {
+                    console.log('[SiteHound] ' + message);
+                }
+            }
+        }
+
+        //
+        // private methods
+        //
+
+        function ignoreHost(host) {
+            if (self.domains.indexOf(host) != -1) {
+                // domain is one of ours to track
+                return false;
+            }
+            if (self.domainsIgnore.indexOf(host) != -1) {
+                // domain is one of ours to ignore
+                return true;
+            }
+            if (self.domainsIgnoreIPAddress && /([0-9]{1,3}\.){3}[0-9]{1,3}/.test(host)) {
+                // host is IP address, and we want to ignore these
+                return true;
+            }
+            if (self.domainsIgnoreSubdomains.length > 0) {
+                for (var i = 0; i < self.domains.length; i++) {
+                    var root_domain = self.domains[i].replace(/^www\./, '');
+                    var host_subdomain = host.replace(new RegExp(root_domain.replace('.', '\.') + '$'), '');
+                    if (self.domainsIgnoreSubdomains.indexOf(host_subdomain) != -1) {
+                        // domain matches a subdomain pattern we wish to ignore
+                        return true;
+                    }
+                }
+            }
+            // else - ignore, but warn about unexpected domain
+            self.trackDebugWarn('location.host not contained within configured domains');
+            return true;
+        }
+
+        function detectPage() {
+            for (var page in self.trackPages) {
+                var pattern = self.trackPages[page];
+                // we support matching based on string, array or regex
+                if (
+                    ((typeof pattern === 'string') && (pattern === location.pathname)) // string
+                    || ((typeof pattern.test === 'function') && pattern.test(location.pathname)) // regex - TOCHECK
+                    || (Array.isArray(pattern) && pattern.includes(location.pathname)) // array
+                ) {
+                    self.page = page;
+                    self.info('Detected page: ' + page);
+                    break;
+                }
+            }
+        }
+
+        function replayQueue() {
+            while (initialConfig.queue && initialConfig.queue.length > 0) {
+                var args = initialConfig.queue.shift();
+                var method = args.shift();
+                if (self[method]) {
+                    self[method].apply(self, args);
+                }
+            }
+        }
+
+        function getUTMParams() {
+            var utm_params = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' '),
+                kw = '',
+                params = {};
+
+            for (var index = 0; index < utm_params.length; ++index) {
+                kw = getQueryParam(document.URL, utm_params[index]);
+                if (kw.length) {
+                    params[utm_params[index]] = kw;
+                }
+            }
+            return params;
+        }
+
+        function getQueryParam(url, param) {
+            param = param.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
+            var regexS = "[\\?&]" + param + "=([^&#]*)";
+            var regex = new RegExp(regexS);
+            var results = regex.exec(url);
+            if (results === null || (results && typeof(results[1]) !== 'string' && results[1].length)) {
+                return '';
+            } else {
+                return decodeURIComponent(results[1]).replace(/\+/g, ' ');
+            }
+        }
+
+        function setCookie(name, value, expiry_days) {
+            var expires = '';
+            if (expiry_days > 0) {
+                var d = new Date();
+                d.setTime(d.getTime() + (expiry_days*24*60*60*1000));
+                expires = 'expires='+d.toUTCString();
+            }
+            document.cookie = name + '=' + value + '; ' + expires;
+        }
+
+        function getCookie(cname) {
+            var name = cname + '=';
+            var cs = document.cookie.split(';');
+            for(var i=0; i < cs.length; i++) {
+                var c = cs[i];
+                while (c.charAt(0)==' ') c = c.substring(1);
+                if (c.indexOf(name) == 0) return c.substring(name.length,c.length);
+            }
+            return '';
+        }
+
+        function mergeObjects(obj1, obj2) {
+            var obj3 = {};
+            for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
+            for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
+            return obj3;
+        }
+
+        //
+        // ready? 
+        //
+        this.info('Ready');
+
+        if (initialConfig.isDone) {
+            this.done();
+        }        
+    }
+
+    //
+    // public methods
+    //
+
+    // like analytics.identify({..}), but only set traits if they're not already set
+    SiteHound.prototype.identifyOnce = function(params) {
+        var user = analytics.user();
+        var traits = user.traits(),
+            new_params = {};
+
+        for (var key in params) {
+            if (!(key in traits)) {
+                new_params[key] = params[key];
+            }
+        }
+
+        analytics.identify(new_params);
+    }
+
+    SiteHound.prototype.track = function(event, traits) {
+        if (typeof traits == 'object') {
+            analytics.track(event, this.getTraitsToSend(traits));
+        } else {
+            analytics.track(event, this.getTraitsToSend());
+        }
+    }
+
+    // similar to identifyOnce, but also track event
+    SiteHound.prototype.trackOnce = function(event, params) {
+        var user = analytics.user();
+        var traits = user.traits();
+
+        if (traits['First ' + event] === undefined) {
+            var userParams = {};
+            userParams['First ' + event] = new Date().toISOString();
+
+            analytics.identify(userParams);
+            this.track(event, params);
+        }
+    }
+
+    SiteHound.prototype.trackAndCount = function(event, params) {
+        var user = analytics.user();
+        var traits = user.traits();
+
+        var count = 1;
+        if (traits) {
+            count = traits[event + ' Count'] ? parseInt(traits[event + ' Count']) + 1: 1;
+        }
+
+        var onceTraits = {};
+        onceTraits['First ' + event] = new Date().toISOString();
+        this.identifyOnce(onceTraits);
+
+        var identifyTraits = {};
+        identifyTraits[event + ' Count'] = count;
+        identifyTraits['Last ' + event] = new Date().toISOString();
+        analytics.identify(identifyTraits);
+        this.track(event, params);
+    }
+
+    SiteHound.prototype.trackLink = function(selector, name) {
+        analytics.trackLink(selector, name, this.getTraitsToSend());
+    }
+
+    //
+    // tracking for debugging our tracking ¯\_(ツ)_/¯
+    //
+
+    SiteHound.prototype.trackDebugInfo = function(message) {
+        this.trackDebug(message, 'info');
+    }
+
+    SiteHound.prototype.trackDebugWarn = function(message) {
+        this.trackDebug(message, 'warn');
+    }
+
+    SiteHound.prototype.trackDebug = function(message, level) {
+        analytics.track('Tracking Debug', {
+            message: message,
+            level: level
+        });
+        this.info('[' + level + '] ' + message);
+    }
+
+    SiteHound.prototype.trackError = function(error) {
+        analytics.track('Tracking Error', {
+            name: error.name,
+            message: error.message
+        });
+        this.info('[error] ' + error.name + '; ' + error.message);
+    }
+}();
