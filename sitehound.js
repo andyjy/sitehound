@@ -26,27 +26,28 @@
 !function() {
     var VERSION = "0.1";
 
-    var analytics = window.analytics = window.analytics || [];
-    if (typeof analytics.ready === 'undefined') {
-        if (window.console && console.error) {
-            console.error('SiteHound: window.analytics is not initialized - ensure analytics.js snippet is included first');
+    !function() {
+        var analytics = window.analytics = window.analytics || [];
+        if (typeof analytics.ready === 'undefined') {
+            if (window.console && console.error) {
+                console.error('SiteHound: window.analytics is not initialized - ensure analytics.js snippet is included first');
+            }
+            return;
         }
-        return;
-    }
 
-    // initialize when analytics.js is ready
-    analytics.ready(function() {
-        // grab our custom config and calls, if any
-        var initialConfig = window.sitehound || {};
-        // initialize SiteHound library, passing in our custom config
-        var sitehound = new SiteHound(initialConfig);
-        // finally, replace the global sitehound var with our instance for future reference
-        window.sitehound = sitehound;
-    });
+        // initialize when analytics.js is ready
+        analytics.ready(function() {
+            // grab our custom config and calls, if any
+            var initialConfig = window.sitehound || {};
+            // initialize SiteHound library, passing in our custom config
+            var sitehound = new SiteHound(initialConfig);
+            // finally, replace the global sitehound var with our instance for future reference
+            window.sitehound = sitehound;
+        });
+    }();
 
     function SiteHound(initialConfig) {
         var self = this;
-        var analytics = window.analytics;
 
         var config = {
             // names and paths of key pages we want to track
