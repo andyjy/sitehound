@@ -185,7 +185,6 @@
 
             } catch(error) {
                 this.trackError(error);
-                throw error;
             }
         }
 
