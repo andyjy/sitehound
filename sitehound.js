@@ -46,6 +46,7 @@
 
     function SiteHound(initialConfig) {
         var self = this;
+        var analytics = window.analytics;
 
         var config = {
             // names and paths of key pages we want to track
