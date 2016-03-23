@@ -69,7 +69,9 @@
             userTraits: {},
             detectLogout: false,
             //
-            logToConsole: true
+            logToConsole: true,
+            //
+            sessionTimeout: 30 // minutes
         };
 
         for (var key in config) {
@@ -96,16 +98,23 @@
                 }
 
                 if (!self.page) {
-                    detectPage();
+                    self.page = detectPage(location.pathname);
                 }
 
-                self.detectLandingPage();
+                self.trackSession();
 
                 var user = analytics.user();
                 var userTraits = user.traits();
+
                 if (userTraits.createdAt) {
                     self.globalTraits['Days since signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
                     self.info('Days since signup: ' + self.globalTraits['Days since signup']);
+                }
+
+                if (self.userTraits['email domain']) {
+                    self.userTraits['email domain'] = self.userTraits['email domain'].match(/[^@]*$/)[0];
+                } else if (userTraits.email || self.userTraits['email']) {
+                    self.userTraits['email domain'] = (userTraits.email || self.userTraits['email']).match(/[^@]*$/)[0];
                 }
 
                 // Fullstory.com session URL
@@ -134,22 +143,27 @@
                     analytics.identify(userId, traits);
                     if (userId !== currentUserId) {
                         self.track('Login');
+                        // TOCHECK
                         // set time of email verification as the user creation time
                         self.identifyOnce({createdAt: new Date().toISOString()});
                     }
+                    setCookie('logged_out', '');
                 } else {
                     analytics.identify(self.globalTraits);
                     if (self.detectLogout) {
                         if (analytics.user() && analytics.user().id()) {
-                            // TODO: track only once until next login
-                            self.track('Logged out');
+                            // track only once until next login
+                            if (!getCookie('logged_out')) {
+                                self.track('Logged out');
+                                setCookie('logged_out', true);
+                            }
                             // analytics.reset();
                         }
                     }
                 }
 
-                if (self.isLandingPage) {
-                    self.trackLandingPage();
+                if (self.trackLandingPage) {
+                    self.trackPage('Landing', self.landingPageTraits);
                 }
 
                 if (self.page) {
@@ -173,73 +187,164 @@
             }
         }
 
-        // is this a landing page hit? (i.e. first pageview in session)
-        this.detectLandingPage = function() {
-            self.isLandingPage = false;
+        this.trackSession = function() {
+            // visitor first seen
+            var firstSeen = getCookie('firstSeen') || new Date().toISOString();
+            setCookie('firstSeen', firstSeen, 366);
+            var daysSinceFirst = Math.floor((new Date() - new Date(firstSeen))/1000/60/60/24);
+            self.globalTraits['First seen'] = firstSeen;
+            self.globalTraits['Days since first seen'] = daysSinceFirst;
+            self.info('Visitor first seen: ' + firstSeen);
+            self.info('Days since first seen: ' + daysSinceFirst);
 
-            if (getCookie('had_first_pageview') == '') {
-                self.isLandingPage = true;
-                setCookie('had_first_pageview', '1');
-                self.info('Detected landing page');
-
-                var sessionCount = parseInt(getCookie('sessionCount') || 0) + 1;
-                self.globalTraits['Session count'] = sessionCount;
-                setCookie('sessionCount', sessionCount, 366);
-                self.info('Session count: ' + sessionCount);
-
-                // record first + last touch UTM params
-                var utm_params = getUTMParams();
-                if (Object.keys(utm_params).length > 0) {
-                    var utm_params_first = {},
-                        utm_params_last = {};
-
-                    self.info('utm params:');
-                    self.info(utm_params);
-
-                    for (var index in utm_params) {
-                        utm_params_first[utm_params[index] + ' [first touch]'] = utm_params[index];
-                        utm_params_last[utm_params[index]+ ' [last touch]'] = utm_params[index];
-                    }
-
-                    // TODO: limit identify calls
-                    self.identifyOnce(utm_params.utm_params_first);
-                    analytics.identify(utm_params_last);
-                }
+            // session start + last updated time
+            var sessionStarted = getCookie('sessionStarted') || new Date().toISOString(),
+                sessionUpdated = getCookie('sessionUpdated') || new Date().toISOString();
+            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60);
+            self.globalTraits['Session started'] = sessionStarted;
+            self.globalTraits['Minutes since session start'] = sessionDuration;
+            self.info('Session started: ' + sessionStarted);
+            self.info('Session duration: ' + sessionDuration);
+            var sessionTimedOut = sessionDuration > self.sessionTimeout;
+            if (sessionTimedOut) {
+                self.info('Session timed out - tracking as new session');
+                sessionStarted = new Date().toISOString();
             }
-        }
+            setCookie('sessionStarted', sessionStarted);
+            setCookie('sessionUpdated', new Date().toISOString());
 
-        this.trackLandingPage = function() {
-            // track landing page event, identifying any special cases if applicable
-            var referrer_host = document.referrer.match(/https?:\/\/([^/]+)\//);
-            if (referrer_host) {
-                referrer_host = referrer_host[1];
+            // tracked pageviews this session
+            var pageViews = (sessionTimedOut ? 0 : parseInt(getCookie('pageViews') || 0)) + 1;
+            self.thisPageTraits['Pageviews this session'] = pageViews;
+            setCookie('pageViews', pageViews);
+            self.info('Pageviews: ' + pageViews);
+
+            self.isLandingPage = false;
+            if (!sessionTimedOut) {
+                // is this a landing page hit? (i.e. first pageview in session)
+                if (pageViews > 1) {
+                    return;
+                }
+                self.isLandingPage = true;
+                self.info('Detected landing page');
+            }
+
+            // session count for this visitor
+            var sessionCount = parseInt(getCookie('sessionCount') || 0) + 1;
+            self.globalTraits['Session count'] = sessionCount;
+            setCookie('sessionCount', sessionCount, 366);
+            self.info('Session count: ' + sessionCount);
+
+            if (sessionTimedOut) {
+                // we don't update attribution tracking when tracking a new session due to inactivity
+                return;
+            }
+
+            // track attribution params for this session
+            var attributionParams = {};
+            for (var param in [
+                'utm_source',
+                'utm_medium',
+                'utm_campaign',
+                'utm_term',
+                'utm_content',
+                'Landing page',
+                'Landing page type',
+                'Referrer',
+                'Referrer domain',
+                'Referrer type'
+            ]) {
+                attributionParams[param] = undefined;
+            }
+
+            // utm params
+            var utmParams = getUTMParams();
+            if (Object.keys(utmParams).length > 0) {
+                self.info('utm params:');
+                self.info(utmParams);
+                attributionParams = mergeObjects(attributionParams, utmParams);
+            }
+
+            // landing page and referrer
+            var referrerParts = document.referrer.match(/https?:\/\/([^/]+)(\/.*)/),
+                referrerHost,
+                referrerPath;
+            if (referrerParts) {
+                referrerHost = referrerParts[1];
+                referrerPath = referrerParts[2];
             }
             // is the referrer from a host we should have (a) tracking on, and (b) set a cookie for, AND can read the cookie on this host?
             //  => referrer is one of domains AND current host is either the same domain as the referrer, or current host is a subdomain of the referrer
-            if ((referrer_host === location.host) || (self.domains.includes(referrer_host) && (location.host + '/').includes(referrer_host + '/'))) {
+            if ((referrerHost === location.host) || (self.domains.includes(referrerHost) && (location.host + '/').includes(referrerHost + '/'))) {
                 // first cookie, but referrer from one of our domains - did the original landing page not have tracking?
                 // Do we want to track the referrer as the original landing page?
-                var referrer_path = document.referrer.replace(/https?:\/\/[^/]+\//, '/');
-                if (self.trackReferrerLandingPages.includes(referrer_path)) {
-                    self.info('Detected known untracked landing page: ' + document.referrer);
+                if (self.trackReferrerLandingPages.includes(referrerPath)) {
                     // track landing page view for our previously untracked referrer
-                    self.trackPage('Landing', {
-                        path: referrer_path,
+                    self.info('Detected known untracked landing page: ' + document.referrer);
+                    self.trackLandingPage = true;
+                    self.landingPageTraits = {
+                        path: referrerPath,
                         url: document.referrer,
                         '$current_url': document.referrer,
                         'Tracked from URL': location.href,
                         referrer: ''
-                    });
+                    };
+                    attributionParams['Landing page'] = referrerPath;
                 } else {
                     self.trackDebugWarn('Landing page with local referrer - tracking code not on all pages?');
                 }
             } else {
-                if ((referrer_host != location.host) && self.domains.includes(referrer_host)) {
+                if ((referrerHost != location.host) && self.domains.includes(referrerHost)) {
                     self.trackDebugInfo('Landing page with referrer from one of our other domains');
                 } else {
-                    self.trackPage('Landing');
+                    self.trackLandingPage = true;
+                    attributionParams['Landing page'] = location.pathname;
+                    attributionParams['Referrer'] = document.referrer;
+                    attributionParams['Referrer domain'] = referrerHost;
                 }
             }
+
+            // add some additional metadata
+            if (attributionParams['Landing page']) {
+                attributionParams['Landing page type'] = self.page;
+            }
+            if (attributionParams['Referrer domain'] == location.host) {
+                attributionParams['Referrer type'] = detectPage(referrerPath);
+            }
+
+            // automatic attribution detection
+            if (!attributionParams['utm_source']) {
+                // adwords / doubleclick
+                if (getQueryParam(document.URL, 'gclid') || getQueryParam(document.URL, 'gclsrc')) {
+                    attributionParams['utm_source'] = 'google';
+                    if (!attributionParams['utm_medium']) {
+                        attributionParams['utm_medium'] = 'cpc';
+                    }
+                }
+                // Yesware
+                if (attributionParams['Referrer domain'] == 't.yesware.com') {
+                    attributionParams['utm_source'] = 'Yesware';
+                    if (!attributionParams['utm_medium']) {
+                        attributionParams['utm_medium'] = 'email';
+                    }
+                }
+            }
+
+            var attributionParamsFirst = {},
+                attributionParamsLast = {};
+            for (var key in attributionParams) {
+                attributionParamsFirst[key + ' [first touch]'] = attributionParams[key];
+                attributionParamsLast[key + ' [last touch]'] = attributionParams[key];
+            }
+
+            // TODO: combine/minimise identify calls
+            // TODO: Don’t call identify if traits are already set with desired values
+
+            if (sessionCount == 1) {
+                // only track first touch params on first session
+                self.identifyOnce(attributionParamsFirst);
+            }
+            analytics.identify(attributionParamsLast);
         }
 
         this.trackPage = function(one, two, three) {
@@ -304,18 +409,17 @@
             return true;
         }
 
-        function detectPage() {
+        function detectPage(path) {
             for (var page in self.trackPages) {
                 var pattern = self.trackPages[page];
                 // we support matching based on string, array or regex
                 if (
-                    ((typeof pattern === 'string') && (pattern === location.pathname)) // string
-                    || ((typeof pattern.test === 'function') && pattern.test(location.pathname)) // regex - TOCHECK
-                    || (Array.isArray(pattern) && pattern.includes(location.pathname)) // array
+                    ((typeof pattern === 'string') && (pattern === path)) // string
+                    || ((typeof pattern.test === 'function') && pattern.test(path)) // regex - TOCHECK
+                    || (Array.isArray(pattern) && pattern.includes(path)) // array
                 ) {
-                    self.page = page;
                     self.info('Detected page: ' + page);
-                    break;
+                    return page;
                 }
             }
         }
@@ -363,11 +467,11 @@
                 d.setTime(d.getTime() + (expiry_days*24*60*60*1000));
                 expires = 'expires='+d.toUTCString();
             }
-            document.cookie = name + '=' + value + '; ' + expires;
+            document.cookie = 'sitehound_' + name + '=' + value + '; ' + expires + ';path=/';
         }
 
         function getCookie(cname) {
-            var name = cname + '=';
+            var name = 'sitehound_' + cname + '=';
             var cs = document.cookie.split(';');
             for(var i=0; i < cs.length; i++) {
                 var c = cs[i];
