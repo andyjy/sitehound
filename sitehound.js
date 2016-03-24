@@ -437,7 +437,8 @@
                         // match body css class
                         self.info('Detected page: ' + page);
                         return page;
-                    } else if (pat === path) {
+                    // string match - we ignore presence of trailing slash on path
+                    } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
                         self.info('Detected page: ' + page);
                         return page;
                     }
