@@ -53,6 +53,8 @@
             // names and paths of key pages we want to track
             // paths can be simple string mathches, arrays, or regular expressions        
             trackPages: null,
+            // track all other pageviews? (as "unidentified")
+            trackAllPages: false,
             // whitelist domains on which to run tracking
             domains: location.host,
             domainsIgnore: ['localhost'],
@@ -183,6 +185,8 @@
                     var args = pageParts.push(self.pageTraits);
                     // track page view
                     self.trackPage.apply(self, pageParts);
+                } else if (self.trackAllPages) {
+                    self.trackPage('Unidentified');
                 }
 
                 // finally - track all custom events etc
