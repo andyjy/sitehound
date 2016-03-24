@@ -414,13 +414,24 @@
             for (var page in self.trackPages) {
                 var pattern = self.trackPages[page];
                 // we support matching based on string, array or regex
-                if (
-                    ((typeof pattern === 'string') && (pattern === path)) // string
-                    || ((typeof pattern.test === 'function') && pattern.test(path)) // regex - TOCHECK
-                    || (Array.isArray(pattern) && pattern.includes(path)) // array
-                ) {
-                    self.info('Detected page: ' + page);
-                    return page;
+                if (!Array.isArray(pattern)) {
+                    pattern = [pattern];
+                }
+                for (var i = 0; i < pattern.length; ++i) {
+                    var pat = pattern[i];
+                    if ((typeof pat.test === 'function') && pat.test(path)) {
+                        // regex matching URL path - TOCHECK
+                        self.info('Detected page: ' + page);
+                        return page;
+                    } else if ((pat[0] === '.') && (path === location.pathname) &&
+                        document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
+                        // match body css class
+                        self.info('Detected page: ' + page);
+                        return page;
+                    } else if (pat === path) {
+                        self.info('Detected page: ' + page);
+                        return page;
+                    }
                 }
             }
         }
