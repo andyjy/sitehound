@@ -140,12 +140,12 @@
                     var currentUserId;
                     if (!analytics.user() || !analytics.user().id()) {
                         // session up to here has been anonymous
-                        analytics.alias(userId);
+                        analytics.alias(self.userId);
                     } else {
                         currentUserId = analytics.user().id();
                     }
-                    analytics.identify(userId, traits);
-                    if (userId !== currentUserId) {
+                    analytics.identify(self.userId, traits);
+                    if (self.userId !== currentUserId) {
                         self.track('Login');
                         // TOCHECK
                         // set time of email verification as the user creation time
