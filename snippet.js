@@ -45,19 +45,11 @@
             sitehound.SNIPPET_VERSION = '0.1';
         }
     }
-
-    try {
-        //
-        // your code here
-        //
-        sitehound.trackPages = {
-            'Home': '/'
-        };
-
-        // call to trigger tracking after all config
-        sitehound.done();
-
-    } catch (error) {
-        sitehound.trackError(error);
-    }
 }();
+
+// your code here
+sitehound.trackPages = {
+    'Home': '/'
+};
+// call to trigger tracking after all config
+sitehound.done();
