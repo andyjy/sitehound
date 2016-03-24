@@ -147,7 +147,7 @@
                         currentUserId = analytics.user().id();
                         self.info('Current userId: ' + currentUserId);
                     }
-                    self.info('identify(' + userId + ', [traits])');
+                    self.info('identify(' + self.userId + ', [traits])');
                     analytics.identify(self.userId, traits);
                     if (self.userId !== currentUserId) {
                         self.track('Login');
