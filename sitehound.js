@@ -24,7 +24,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.2";
+    var VERSION = "0.3";
 
     !function() {
         var analytics = window.analytics = window.analytics || [];
@@ -608,7 +608,8 @@
     SiteHound.prototype.trackDebug = function(message, level) {
         analytics.track('Tracking Debug', {
             message: message,
-            level: level
+            level: level,
+            'SiteHound library version': this.VERSION
         });
         this.info('[' + level + '] ' + message);
     }
@@ -616,7 +617,8 @@
     SiteHound.prototype.trackError = function(error) {
         analytics.track('Tracking Error', {
             name: error.name,
-            message: error.message
+            message: error.message,
+            'SiteHound library version': this.VERSION
         });
         if (window.console && console.error) {
             console.error('[SiteHound] ' + error.name + '; ' + error.message);
