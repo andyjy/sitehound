@@ -143,6 +143,8 @@
                         // session up to here has been anonymous
                         self.info('Anonymous session until now - alias()');
                         analytics.alias(self.userId);
+                        // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
+                        analytics.identify('x');
                     } else {
                         currentUserId = analytics.user().id();
                         self.info('Current userId: ' + currentUserId);
