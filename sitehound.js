@@ -67,11 +67,11 @@
             // traits that we only want to pass on calls to analytics.[track|page] on this pageview
             thisPageTraits: {},
             //
-            userId: null,
+            userId: undefined,
             userTraits: {},
-            detectLogout: false,
+            detectLogout: undefined,
             //
-            logToConsole: true,
+            logToConsole: false,
             //
             sessionTimeout: 30 // minutes
         };
@@ -152,6 +152,11 @@
                     setCookie('logged_out', '');
                 } else {
                     analytics.identify(self.globalTraits);
+                    if (self.detectLogout === undefined) {
+                        // by default, automatically detect logout if the userId property has been set
+                        //  - even if it's been set to null
+                        self.detectLogout = self.userId !== undefined;
+                    }
                     if (self.detectLogout) {
                         if (analytics.user() && analytics.user().id()) {
                             // track only once until next login
