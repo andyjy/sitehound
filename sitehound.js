@@ -51,7 +51,7 @@
 
         var config = {
             // names and paths of key pages we want to track
-            // paths can be simple string mathches, arrays, or regular expressions        
+            // paths can be simple string matches, arrays, or regular expressions
             trackPages: null,
             // track all other pageviews? (as "unidentified")
             trackAllPages: false,
@@ -132,6 +132,7 @@
                 }
 
                 if (self.userId) {
+                    self.info('Received userId: ' + self.userId);
                     var userTraits = {};
                     for (var key in self.userTraits) {
                         userTraits['User ' + key] = self.userTraits[key];
@@ -140,16 +141,20 @@
                     var currentUserId;
                     if (!analytics.user() || !analytics.user().id()) {
                         // session up to here has been anonymous
+                        self.info('Anonymous session until now - alias()');
                         analytics.alias(self.userId);
                     } else {
                         currentUserId = analytics.user().id();
+                        self.info('Current userId: ' + currentUserId);
                     }
+                    self.info('identify(' + userId + ', [traits])');
                     analytics.identify(self.userId, traits);
                     if (self.userId !== currentUserId) {
                         self.track('Login');
                         // TOCHECK
                         // set time of email verification as the user creation time
                         self.identifyOnce({createdAt: new Date().toISOString()});
+                        self.info('userId != currentUserId - Login');
                     }
                     setCookie('logged_out', '');
                 } else {
@@ -160,11 +165,13 @@
                         self.detectLogout = self.userId !== undefined;
                     }
                     if (self.detectLogout) {
+                        self.info('Detecting potential logout..');
                         if (analytics.user() && analytics.user().id()) {
                             // track only once until next login
                             if (!getCookie('logged_out')) {
                                 self.track('Logged out');
                                 setCookie('logged_out', true);
+                                self.info('Logged out');
                             }
                             // analytics.reset();
                         }
@@ -357,8 +364,12 @@
             if (sessionCount == 1) {
                 // only track first touch params on first session
                 self.identifyOnce(attributionParamsFirst);
+                self.info('First touch attribution:');
+                self.info(attributionParamsFirst);
             }
             analytics.identify(attributionParamsLast);
+            self.info('Last touch attribution:');
+            self.info(attributionParamsLast);
         }
 
         this.trackPage = function(one, two, three) {
