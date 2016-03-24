@@ -42,7 +42,7 @@
                 sitehound.isDone = true;
             }
 
-            sitehound.SNIPPET_VERSION = '0.1';
+            sitehound.SNIPPET_VERSION = '1.0';
         }
     }
 }();
