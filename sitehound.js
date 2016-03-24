@@ -428,15 +428,19 @@
                 }
                 for (var i = 0; i < pattern.length; ++i) {
                     var pat = pattern[i];
-                    if ((typeof pat.test === 'function') && pat.test(path)) {
-                        // regex matching URL path - TOCHECK
-                        self.info('Detected page: ' + page);
-                        return page;
-                    } else if ((pat[0] === '.') && (path === location.pathname) &&
-                        document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
+                    if (typeof pat.test === 'function') {
+                        if (pat.test(path)) {
+                            // regex matching URL path - TOCHECK
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
+                    } else if (pat[0] === '.') {
                         // match body css class
-                        self.info('Detected page: ' + page);
-                        return page;
+                        if ((path === location.pathname) &&
+                            document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
                     // string match - we ignore presence of trailing slash on path
                     } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
                         self.info('Detected page: ' + page);
@@ -610,6 +614,8 @@
             name: error.name,
             message: error.message
         });
-        this.info('[error] ' + error.name + '; ' + error.message);
+        if (window.console && console.error) {
+            console.error('[SiteHound] ' + error.name + '; ' + error.message);
+        }
     }
 }();
