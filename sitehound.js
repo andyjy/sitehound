@@ -24,7 +24,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.1";
+    var VERSION = "0.2";
 
     !function() {
         var analytics = window.analytics = window.analytics || [];
@@ -85,7 +85,7 @@
             this[key] = config[key];
         }
 
-        this.VERSION = VERSION;
+        this.thisPageTraits['SiteHound library version'] = this.VERSION = VERSION;
 
         //
         // privileged methods
@@ -300,6 +300,10 @@
                         referrer: ''
                     };
                     attributionParams['Landing page'] = referrerPath;
+                } else if (document.referrer === location.href) {
+                    // referrer is the current page - treat as landing page
+                    self.trackLandingPage = true;
+                    attributionParams['Landing page'] = location.pathname;
                 } else {
                     self.trackDebugWarn('Landing page with local referrer - tracking code not on all pages?');
                 }
