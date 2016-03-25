@@ -24,7 +24,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.5";
+    var VERSION = "0.6";
 
     !function() {
         var analytics = window.analytics = window.analytics || [];
@@ -120,13 +120,13 @@
                 }
 
                 if (self.overrideReferrer !== undefined) {
-                    thisPageTraits['referrer'] = thisPageTraits['Referrer'] = thisPageTraits['$referrer'] = self.overrideReferrer;
-                    //var referrerParts = thisPageTraits['referrer'].match(/https?:\/\/([^/]+)(\/.*)/),
+                    self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
+                    //var referrerParts = self.thisPageTraits['referrer'].match(/https?:\/\/([^/]+)(\/.*)/),
                     //    referrerHost;
                     //if (referrerParts) {
                     //    referrerHost = referrerParts[1];
                     //}
-                    //thisPageTraits['Referring Domain'] = thisPageTraits['$referring_domain'] = referrerHost;
+                    //self.thisPageTraits['Referring Domain'] = self.thisPageTraits['$referring_domain'] = referrerHost;
                 }
 
                 self.trackSession();
@@ -309,11 +309,11 @@
             // track attribution params for this session
             var attributionParams = {};
             var paramNames = [
-                'utm_source',
-                'utm_medium',
-                'utm_campaign',
-                'utm_term',
-                'utm_content',
+                'UTM Source',
+                'UTM Medium',
+                'UTM Campaign',
+                'UTM Term',
+                'UTM Content',
                 'Landing page',
                 'Landing page type',
                 'Referrer',
@@ -534,7 +534,7 @@
             for (var index = 0; index < utm_params.length; ++index) {
                 kw = getQueryParam(document.URL, utm_params[index]);
                 if (kw.length) {
-                    params[utm_params[index]] = kw;
+                    params['UTM ' + titleCase(utm_params[index].slice(4))] = kw;
                 }
             }
             return params;
@@ -550,6 +550,10 @@
             } else {
                 return decodeURIComponent(results[1]).replace(/\+/g, ' ');
             }
+        }
+
+        function titleCase(str) {
+            return str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); });
         }
 
         function setCookie(name, value, expiry_days, domain) {
