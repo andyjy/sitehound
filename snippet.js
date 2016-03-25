@@ -18,6 +18,7 @@
                 'track',
                 'trackAndCount',
                 'trackLink',
+                'trackForm',
                 'trackOnce',
                 'trackDebugInfo',
                 'trackDebugWarn',
@@ -42,7 +43,7 @@
                 sitehound.isDone = true;
             }
 
-            sitehound.SNIPPET_VERSION = '1.0';
+            sitehound.SNIPPET_VERSION = '1.1';
         }
     }
 }();

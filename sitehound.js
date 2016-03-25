@@ -602,8 +602,12 @@
         this.track(event, params);
     }
 
-    SiteHound.prototype.trackLink = function(selector, name) {
-        analytics.trackLink(selector, name, this.getTraitsToSend());
+    SiteHound.prototype.trackLink = function(elements, name) {
+        analytics.trackLink(elements, name, this.getTraitsToSend());
+    }
+
+    SiteHound.prototype.trackForm = function(elements, name) {
+        analytics.trackForm(elements, name, this.getTraitsToSend());
     }
 
     //
