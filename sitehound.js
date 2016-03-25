@@ -308,7 +308,7 @@
 
             // track attribution params for this session
             var attributionParams = {};
-            for (var param in [
+            var paramNames = [
                 'utm_source',
                 'utm_medium',
                 'utm_campaign',
@@ -319,8 +319,9 @@
                 'Referrer',
                 'Referrer domain',
                 'Referrer type'
-            ]) {
-                attributionParams[param] = undefined;
+            ];
+            for (var i = 0; i < paramNames.length; i++) {
+                attributionParams[paramNames[i]] = null;
             }
 
             // utm params
@@ -333,7 +334,7 @@
 
             // landing page and referrer
             var referrerParts = document.referrer.match(/https?:\/\/([^/]+)(\/.*)/),
-                referrerHost,
+                referrerHost = null,
                 referrerPath;
             if (referrerParts) {
                 referrerHost = referrerParts[1];
@@ -369,7 +370,7 @@
                 } else {
                     self.trackLandingPage = true;
                     attributionParams['Landing page'] = location.pathname;
-                    attributionParams['Referrer'] = document.referrer;
+                    attributionParams['Referrer'] = document.referrer ? document.referrer : null;
                     attributionParams['Referrer domain'] = referrerHost;
                 }
             }
@@ -410,15 +411,15 @@
             // TODO: combine/minimise identify calls
             // TODO: Don’t call identify if traits are already set with desired values
 
+            self.info('Attribution params:');
+            self.info(attributionParams);
             if (sessionCount == 1) {
                 // only track first touch params on first session
                 self.identifyOnce(attributionParamsFirst);
-                self.info('First touch attribution:');
-                self.info(attributionParamsFirst);
+                self.info('..setting first touch params');
             }
             analytics.identify(attributionParamsLast);
-            self.info('Last touch attribution:');
-            self.info(attributionParamsLast);
+            self.info('..setting last touch params');
         }
 
         this.trackPage = function(one, two, three) {
@@ -553,13 +554,13 @@
 
         function setCookie(name, value, expiry_days, domain) {
             var expires = '';
-            if (expiry_days > 0) {
+            if (expiry_days != 0) {
                 var d = new Date();
                 d.setTime(d.getTime() + (expiry_days*24*60*60*1000));
                 expires = 'expires='+d.toUTCString();
             }
             if (domain === undefined) {
-                domain = topDomain(location.hostname);
+                domain = self.cookieDomain;
             }
             document.cookie = 'sh_' + name + '=' + value + '; ' + expires + ';path=/' + (domain ? ';domain=' + domain : '');
         }
@@ -626,7 +627,7 @@
 
             setCookie(cname, 1, 0, domain);
             if (getCookie(cname)) {
-              setCookie(cname, null, 0, domain);
+              setCookie(cname, '', -100, domain);
               return domain
             }
           }
@@ -671,6 +672,9 @@
         // ready? 
         //
         this.info('Ready (v' + VERSION + ')');
+
+        this.cookieDomain = topDomain(location.hostname);
+        this.info('Cookie domain: ' + this.cookieDomain);
 
         if (initialConfig.isDone) {
             this.sniff();
