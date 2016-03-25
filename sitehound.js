@@ -582,7 +582,7 @@
         //
         // ready? 
         //
-        this.info('Ready');
+        this.info('Ready (v' + VERSION + ')');
 
         if (initialConfig.isDone) {
             this.sniff();
