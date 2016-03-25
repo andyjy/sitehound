@@ -551,18 +551,21 @@
             }
         }
 
-        function setCookie(name, value, expiry_days) {
+        function setCookie(name, value, expiry_days, domain) {
             var expires = '';
             if (expiry_days > 0) {
                 var d = new Date();
                 d.setTime(d.getTime() + (expiry_days*24*60*60*1000));
                 expires = 'expires='+d.toUTCString();
             }
-            document.cookie = 'sitehound_' + name + '=' + value + '; ' + expires + ';path=/';
+            if (domain === undefined) {
+                domain = topDomain(location.hostname);
+            }
+            document.cookie = 'sh_' + name + '=' + value + '; ' + expires + ';path=/' + (domain ? ';domain=' + domain : '');
         }
 
         function getCookie(cname) {
-            var name = 'sitehound_' + cname + '=';
+            var name = 'sh_' + cname + '=';
             var cs = document.cookie.split(';');
             for(var i=0; i < cs.length; i++) {
                 var c = cs[i];
@@ -578,6 +581,91 @@
             for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
             return obj3;
         }
+
+        //
+        // Modified from https://github.com/segmentio/top-domain v2.0.1
+        // @TODO: learn how to javascript good
+        //
+        /**
+         * Get the top domain.
+         *
+         * The function constructs the levels of domain
+         * and attempts to set a global cookie on each one
+         * when it succeeds it returns the top level domain.
+         *
+         * The method returns an empty string when the hostname
+         * is an ip or `localhost`.
+         *
+         * Example levels:
+         *
+         *      domain('www.google.co.uk');
+         *      // => ["co.uk", "google.co.uk", "www.google.co.uk"]
+         *
+         * Example:
+         *
+         *      domain('localhost');
+         *      // => ''
+         *      domain('dev');
+         *      // => ''
+         *      domain('127.0.0.1');
+         *      // => ''
+         *      domain('segment.io');
+         *      // => 'segment.io'
+         *
+         * @param {String} url
+         * @return {String}
+         * @api public
+         */
+        function topDomain(hostname) {
+          var levels = domainLevels(hostname);
+
+          // Lookup the real top level one.
+          for (var i = 0; i < levels.length; ++i) {
+            var cname = '__tld__';
+            var domain = '.' + levels[i];
+
+            setCookie(cname, 1, 0, domain);
+            if (getCookie(cname)) {
+              setCookie(cname, null, 0, domain);
+              return domain
+            }
+          }
+
+          return '';
+        };
+
+        /**
+         * Levels returns all levels of the given url.
+         *
+         * @param {String} url
+         * @return {Array}
+         * @api public
+         */
+        function domainLevels(hostname) {
+          var parts = hostname.split('.');
+          var last = parts[parts.length-1];
+          var levels = [];
+
+          // Ip address.
+          if (4 == parts.length && parseInt(last, 10) == last) {
+            return levels;
+          }
+
+          // Localhost.
+          if (1 >= parts.length) {
+            return levels;
+          }
+
+          // Create levels.
+          for (var i = parts.length-2; 0 <= i; --i) {
+            levels.push(parts.slice(i).join('.'));
+          }
+
+          return levels;
+        };
+        //
+        // END grab from https://github.com/segmentio/top-domain
+        //
 
         //
         // ready? 
