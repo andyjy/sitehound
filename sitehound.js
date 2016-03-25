@@ -2,7 +2,7 @@
 // Website event and user tracking for Segment.com's analytics.js
 // 
 // @author        Andy Young | @andyy | andy@apexa.co.uk
-// @version       0.4 - 25th March 2016
+// @version       0.5 - 25th March 2016
 // @licence       GNU GPL v3
 //
 // ~~ 500 Startups Distro Team | #500STRONG | 500.co ~~
@@ -24,7 +24,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.4";
+    var VERSION = "0.5";
 
     !function() {
         var analytics = window.analytics = window.analytics || [];
