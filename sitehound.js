@@ -2,7 +2,7 @@
 // Website event and user tracking for Segment.com's analytics.js
 // 
 // @author        Andy Young | @andyy | andy@apexa.co.uk
-// @version       1.0 - 23rd March 2016
+// @version       0.4 - 25th March 2016
 // @licence       GNU GPL v3
 //
 // ~~ 500 Startups Distro Team | #500STRONG | 500.co ~~
@@ -24,7 +24,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.3";
+    var VERSION = "0.4";
 
     !function() {
         var analytics = window.analytics = window.analytics || [];
@@ -55,6 +55,9 @@
             trackPages: null,
             // track all other pageviews? (as "unidentified")
             trackAllPages: false,
+            // detect and re-run tracking if the window.location changes?
+            detectURLChange: true,
+            detectHashChange: false,
             // whitelist domains on which to run tracking
             domains: location.host,
             domainsIgnore: ['localhost'],
@@ -75,7 +78,11 @@
             //
             logToConsole: false,
             //
-            sessionTimeout: 30 // minutes
+            sessionTimeout: 30, // minutes
+            //
+            overrideReferrer: undefined,
+            // internal: have we called analytics.page() yet?
+            calledPage: false
         };
 
         for (var key in config) {
@@ -87,13 +94,20 @@
 
         this.thisPageTraits['SiteHound library version'] = this.VERSION = VERSION;
 
+        // for auto-detection of page URL change (single-page sites e.g. angularjs)
+        var intervalId, currentURL;
+
+        analytics.on('page', function() {
+            self.calledPage = true;
+        });
+
         //
         // privileged methods
         //
 
-        this.done = function() {
+        this.sniff = this.done = function() {
             try {
-                self.info('Running..');
+                self.info('Sniffing..');
 
                 // check we want to track this host
                 if (ignoreHost(location.host)) {
@@ -103,6 +117,16 @@
 
                 if (!self.page) {
                     self.page = detectPage(location.pathname);
+                }
+
+                if (self.overrideReferrer !== undefined) {
+                    thisPageTraits['referrer'] = thisPageTraits['Referrer'] = thisPageTraits['$referrer'] = self.overrideReferrer;
+                    //var referrerParts = thisPageTraits['referrer'].match(/https?:\/\/([^/]+)(\/.*)/),
+                    //    referrerHost;
+                    //if (referrerParts) {
+                    //    referrerHost = referrerParts[1];
+                    //}
+                    //thisPageTraits['Referring Domain'] = thisPageTraits['$referring_domain'] = referrerHost;
                 }
 
                 self.trackSession();
@@ -196,11 +220,34 @@
                     self.trackPage.apply(self, pageParts);
                 } else if (self.trackAllPages) {
                     self.trackPage('Unidentified');
+                } else if (!self.calledPage) {
+                    // Segment.com requires we call page() at least once
+                    analytics.page();
+                    self.calledPage = true;
                 }
 
                 // finally - track all custom events etc
                 replayQueue();
 
+                // ongoing: auto-detect URL change
+                if ((self.detectURLChange || self.detectHashChange) && !intervalId) {
+                    currentURL = location.href;
+                    intervalId = setInterval(
+                        function() {
+                            if (self.detectHashChange ?
+                                (location.href !== currentURL) :
+                                (location.href.replace(/#.*$/, '') !== currentURL.replace(/#.*$/, ''))
+                            ) {
+                                self.overrideReferrer = currentURL || document.referrer;
+                                currentURL = location.href;
+                                self.info('Detected URL change: ' + currentURL);
+                                self.page = undefined;
+                                self.sniff();
+                            }
+                        },
+                        1000
+                    );
+                }
             } catch(error) {
                 this.trackError(error);
             }
@@ -384,6 +431,7 @@
             } else {
                 analytics.page(one, self.getTraitsToSend());
             }
+            self.calledPage = true;
         }
 
         this.getTraitsToSend = function(traits) {
@@ -537,7 +585,7 @@
         this.info('Ready');
 
         if (initialConfig.isDone) {
-            this.done();
+            this.sniff();
         }        
     }
 

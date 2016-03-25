@@ -39,7 +39,7 @@
                 sitehound[key] = factory(key);
             }
 
-            sitehound.done = function() {
+            sitehound.sniff = sitehound.done = function() {
                 sitehound.isDone = true;
             }
 
@@ -53,4 +53,4 @@ sitehound.trackPages = {
     'Home': '/'
 };
 // call to trigger tracking after all config
-sitehound.done();
+sitehound.sniff();
