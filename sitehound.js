@@ -140,6 +140,11 @@
                 // replay any events queued up by the snippet before the lib was loaded
                 replayQueue();
 
+                if (self.sniffed) {
+                    return;
+                }
+                self.sniffed = true;
+
                 // auto-detect URL change and re-trigger sniffing for new virtual pageview
                 if ((self.detectURLChange || self.detectHashChange) && !intervalId) {
                     currentURL = location.href;
@@ -162,6 +167,11 @@
             } catch(error) {
                 this.trackError(error);
             }
+        }
+
+        // like analytics.identify({..}), but only set traits if they're not already set
+        this.identifyOnce = function(params) {
+            self.adaptor.identify(self.ignoreExistingTraits(params));
         }
 
         this.getTraitsToSend = function(traits) {
@@ -248,9 +258,13 @@
             if (window.FS && window.FS.getCurrentSessionURL) {
                 // ideally do it instantly so we don't trigger a separate identify() call
                 self.globalTraits['Fullstory URL'] = FS.getCurrentSessionURL();
-            } else {
-                window['_fs_ready'] = function() {
+            } else if (!self.sniffed) {
+                var _old_fs_ready = window._fs_ready;
+                window._fs_ready = function() {
                     self.adaptor.identify({'Fullstory URL': FS.getCurrentSessionURL()});
+                    if (typeof _old_fs_ready === 'function') {
+                        _old_fs_ready();
+                    }
                 };
             }
 
@@ -273,13 +287,15 @@
                     self.info('Current userId: ' + currentUserId);
                 }
                 self.info('identify(' + self.userId + ', [traits])');
-                self.adaptor.identify(self.userId, traits);
                 if (self.userId !== currentUserId) {
-                    self.track('Login');
                     // TOCHECK
                     // set time of email verification as the user creation time
-                    self.identifyOnce({createdAt: new Date().toISOString()});
+                    traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
+                }
+                self.adaptor.identify(self.userId, traits);
+                if (self.userId !== currentUserId) {
                     self.info('userId != currentUserId - Login');
+                    self.track('Login');
                 }
                 setCookie('logged_out', '');
             } else {
@@ -507,18 +523,15 @@
                 attributionParamsLast[key + ' [last touch]'] = attributionParams[key];
             }
 
-            // TODO: combine/minimise identify calls
-            // TODO: Don’t call identify if traits are already set with desired values
-
             self.info('Attribution params:');
             self.info(attributionParams);
             if (sessionCount == 1) {
                 // only track first touch params on first session
-                self.identifyOnce(attributionParamsFirst);
                 self.info('..setting first touch params');
+                self.globalTraits = mergeObjects(self.globalTraits, ignoreExistingTraits(attributionParamsFirst));
             }
-            self.adaptor.identify(attributionParamsLast);
             self.info('..setting last touch params');
+            self.globalTraits = mergeObjects(self.globalTraits, attributionParamsLast);
         }
 
         function trackPage(one, two, three) {
@@ -598,6 +611,17 @@
             for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
             for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
             return obj3;
+        }
+
+        function ignoreExistingTraits(params) {
+            var traits = self.adaptor.userTraits(),
+                newParams = {};
+            for (var key in params) {
+                if (!(key in traits)) {
+                    newParams[key] = params[key];
+                }
+            }
+            return newParams;
         }
 
         //
@@ -704,20 +728,6 @@
 
     SiteHound.prototype.identify = function(a, b) {
         this.adaptor.identify(a, b);
-    }
-
-    // like analytics.identify({..}), but only set traits if they're not already set
-    SiteHound.prototype.identifyOnce = function(params) {
-        var traits = this.adaptor.userTraits(),
-            new_params = {};
-
-        for (var key in params) {
-            if (!(key in traits)) {
-                new_params[key] = params[key];
-            }
-        }
-
-        this.adaptor.identify(new_params);
     }
 
     SiteHound.prototype.track = function(event, traits) {
