@@ -129,10 +129,19 @@
                 // check we want to track this host
                 if (ignoreHost(location.host)) {
                     self.info('Ignoring host: ' + location.host);
+                    self.adaptor = new SiteHound_Adaptor_Disabled();
+                    return;
+                }
+                if (getCookie('dnt')) {
+                    self.info('do-not-track cookie present');
+                    self.adaptor = new SiteHound_Adaptor_Disabled();
                     return;
                 }
 
+                // core tracking for on page load
                 doSniff();
+
+                // callback for adaptor
                 if (typeof self.adaptor.afterSniff === 'function') {
                     self.adaptor.afterSniff();
                 }
@@ -145,7 +154,7 @@
                 }
                 self.sniffed = true;
 
-                // auto-detect URL change and re-trigger sniffing for new virtual pageview
+                // auto-detect URL change and re-trigger sniffing for any future virtual pageviews
                 if ((self.detectURLChange || self.detectHashChange) && !intervalId) {
                     currentURL = location.href;
                     intervalId = setInterval(
@@ -189,6 +198,16 @@
                 } else {
                     console.log('[SiteHound] ' + message);
                 }
+            }
+        }
+
+        this.doNotTrack = function(dnt) {
+            dnt = (typeof dnt === 'undefined') ? true : !!dnt;
+            if (dnt) {
+                setCookie('dnt', '1', 1000);
+            } else {
+                // clear cookie - track again
+                setCookie('dnt', '', -100);
             }
         }
 
@@ -717,6 +736,12 @@
         this.cookieDomain = topDomain(location.hostname);
         this.info('Cookie domain: ' + this.cookieDomain);
 
+        if (getCookie('dnt')) {
+            self.info('do-not-track cookie present');
+            self.adaptor = new SiteHound_Adaptor_Disabled();
+            return;
+        }
+
         if (initialConfig.isDone) {
             this.sniff();
         }        
@@ -813,6 +838,13 @@
     //
     // Adaptors
     //
+
+    function SiteHound_Adaptor_Disabled() {
+        // tracking disabled
+        this.check = this.ready = this.identify = this.track = this.trackLink = this.trackForm
+            = this.page = this.alias = this.userId = this.userTraits
+            = function() {}
+    }
 
     function SiteHound_Adaptor_Segment() {
         var analytics = window.analytics = window.analytics || [],
