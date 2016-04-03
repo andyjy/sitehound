@@ -1,14 +1,18 @@
 //
-// Website event and user tracking for Segment.com's analytics.js
+// SiteHound - Easy & powerful user, session and event tracking
+//
+// Supports tracking events to:
+// - Segment.com's analytics.js
+// - mixpanel.js
 // 
-// @author        Andy Young | @andyy | andy@apexa.co.uk
-// @version       0.5 - 25th March 2016
+// ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
+//
+// @author        Andy Young // @andyy // andy@apexa.co.uk
+// @version       0.8 - 3rd April 2016
 // @licence       GNU GPL v3
 //
-// ~~ 500 Startups Distro Team | #500STRONG | 500.co ~~
 //
-//
-//  Copyright (C) 2016  Andy Young
+//  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -24,31 +28,41 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.6";
+    var VERSION = "0.8";
 
     !function() {
-        var analytics = window.analytics = window.analytics || [];
-        if (typeof analytics.ready === 'undefined') {
+        var initialConfig = window.sitehound || {};
+
+        // initialize adaptor for the analytics library we want to use
+        var adaptorClass = titleCase(initialConfig.adaptor) || 'Segment';
+        try {
+            var adaptor = eval('new SiteHound_Adaptor_' + adaptorClass);
+        } catch (error) {
             if (window.console && console.error) {
-                console.error('SiteHound: window.analytics is not initialized - ensure analytics.js snippet is included first');
+                console.error('[SiteHound] adaptor class SiteHound_Adaptor_' + adaptorClass + " could not be loaded");
+                console.error('[SiteHound] ' + error.name + '; ' + error.message);
+            }
+            return;
+        }
+        if (!adaptor.check()) {
+            if (window.console && console.error) {
+                console.error('[SiteHound] failed to attach to ' + adaptorClass);
             }
             return;
         }
 
-        // initialize when analytics.js is ready
-        analytics.ready(function() {
+        // initialize SiteHound when our adaptor's target library is ready
+        adaptor.ready(function() {
             // grab our custom config and calls, if any
             var initialConfig = window.sitehound || {};
             // initialize SiteHound library, passing in our custom config
-            var sitehound = new SiteHound(initialConfig);
+            var sitehound = new SiteHound(initialConfig, adaptor);
             // finally, replace the global sitehound var with our instance for future reference
             window.sitehound = sitehound;
         });
     }();
 
-    function SiteHound(initialConfig) {
-        var self = this;
-
+    function SiteHound(initialConfig, adaptor) {
         var config = {
             // names and paths of key pages we want to track
             // paths can be simple string matches, arrays, or regular expressions
@@ -81,9 +95,17 @@
             sessionTimeout: 30, // minutes
             //
             overrideReferrer: undefined,
-            // internal: have we called analytics.page() yet?
-            calledPage: false
         };
+
+        var self = this;
+
+        this.adaptor = adaptor;
+        if ((typeof adaptor !== 'object') || !adaptor.check()) {
+            if (window.console && console.error) {
+                console.error('[SiteHound] adaptor not valid');
+            }
+            return;
+        }
 
         for (var key in config) {
             if (initialConfig[key] !== undefined) {
@@ -97,10 +119,6 @@
         // for auto-detection of page URL change (single-page sites e.g. angularjs)
         var intervalId, currentURL;
 
-        analytics.on('page', function() {
-            self.calledPage = true;
-        });
-
         //
         // privileged methods
         //
@@ -108,128 +126,21 @@
         this.sniff = this.done = function() {
             try {
                 self.info('Sniffing..');
-
                 // check we want to track this host
                 if (ignoreHost(location.host)) {
                     self.info('Ignoring host: ' + location.host);
                     return;
                 }
 
-                if (!self.page) {
-                    self.page = detectPage(location.pathname);
+                doSniff();
+                if (typeof self.adaptor.afterSniff === 'function') {
+                    self.adaptor.afterSniff();
                 }
 
-                if (self.overrideReferrer !== undefined) {
-                    self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
-                    //var referrerParts = self.thisPageTraits['referrer'].match(/https?:\/\/([^/]+)(\/.*)/),
-                    //    referrerHost;
-                    //if (referrerParts) {
-                    //    referrerHost = referrerParts[1];
-                    //}
-                    //self.thisPageTraits['Referring Domain'] = self.thisPageTraits['$referring_domain'] = referrerHost;
-                }
-
-                self.trackSession();
-
-                var user = analytics.user();
-                var userTraits = user.traits();
-
-                if (userTraits.createdAt) {
-                    self.globalTraits['Days since signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
-                    self.info('Days since signup: ' + self.globalTraits['Days since signup']);
-                }
-
-                if (self.userTraits['email domain']) {
-                    self.userTraits['email domain'] = self.userTraits['email domain'].match(/[^@]*$/)[0];
-                } else if (userTraits.email || self.userTraits['email']) {
-                    self.userTraits['email domain'] = (userTraits.email || self.userTraits['email']).match(/[^@]*$/)[0];
-                }
-
-                // Fullstory.com session URL
-                if (window.FS && window.FS.getCurrentSessionURL) {
-                    // ideally do it instantly so we don't trigger a separate identify() call
-                    self.globalTraits['Fullstory URL'] = FS.getCurrentSessionURL();
-                } else {
-                    window['_fs_ready'] = function() {
-                        analytics.identify({'Fullstory URL': FS.getCurrentSessionURL()});
-                    };
-                }
-
-                if (self.userId) {
-                    self.info('Received userId: ' + self.userId);
-                    var userTraits = {};
-                    for (var key in self.userTraits) {
-                        userTraits['User ' + key] = self.userTraits[key];
-                    }
-                    var traits = mergeObjects(self.globalTraits, userTraits);
-                    var currentUserId;
-                    if (!analytics.user() || !analytics.user().id()) {
-                        // session up to here has been anonymous
-                        self.info('Anonymous session until now - alias()');
-                        analytics.alias(self.userId);
-                        // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
-                        analytics.identify('x');
-                    } else {
-                        currentUserId = analytics.user().id();
-                        self.info('Current userId: ' + currentUserId);
-                    }
-                    self.info('identify(' + self.userId + ', [traits])');
-                    analytics.identify(self.userId, traits);
-                    if (self.userId !== currentUserId) {
-                        self.track('Login');
-                        // TOCHECK
-                        // set time of email verification as the user creation time
-                        self.identifyOnce({createdAt: new Date().toISOString()});
-                        self.info('userId != currentUserId - Login');
-                    }
-                    setCookie('logged_out', '');
-                } else {
-                    analytics.identify(self.globalTraits);
-                    if (self.detectLogout === undefined) {
-                        // by default, automatically detect logout if the userId property has been set
-                        //  - even if it's been set to null
-                        self.detectLogout = self.userId !== undefined;
-                    }
-                    if (self.detectLogout) {
-                        self.info('Detecting potential logout..');
-                        if (analytics.user() && analytics.user().id()) {
-                            // track only once until next login
-                            if (!getCookie('logged_out')) {
-                                self.track('Logged out');
-                                setCookie('logged_out', true);
-                                self.info('Logged out');
-                            }
-                            // analytics.reset();
-                        }
-                    }
-                }
-
-                if (self.trackLandingPage) {
-                    self.trackPage('Landing', self.landingPageTraits);
-                }
-
-                if (self.page) {
-                    // if the page contains a vertical bar, separate out the page vs. category
-                    var pageParts = self.page.split('|', 2).map(
-                        function(a) {
-                            return a.trim();
-                        }
-                    );
-                    var args = pageParts.push(self.pageTraits);
-                    // track page view
-                    self.trackPage.apply(self, pageParts);
-                } else if (self.trackAllPages) {
-                    self.trackPage('Unidentified');
-                } else if (!self.calledPage) {
-                    // Segment.com requires we call page() at least once
-                    analytics.page();
-                    self.calledPage = true;
-                }
-
-                // finally - track all custom events etc
+                // replay any events queued up by the snippet before the lib was loaded
                 replayQueue();
 
-                // ongoing: auto-detect URL change
+                // auto-detect URL change and re-trigger sniffing for new virtual pageview
                 if ((self.detectURLChange || self.detectHashChange) && !intervalId) {
                     currentURL = location.href;
                     intervalId = setInterval(
@@ -253,7 +164,195 @@
             }
         }
 
-        this.trackSession = function() {
+        this.getTraitsToSend = function(traits) {
+            if (typeof traits === 'object') {
+                return mergeObjects(self.thisPageTraits, traits);
+            } else {
+                return self.thisPageTraits;
+            }
+        }
+
+        this.info = function(message) {
+            if (self.logToConsole && window.console && console.log) {
+                if (typeof message === 'object') {
+                    console.log(message);
+                } else {
+                    console.log('[SiteHound] ' + message);
+                }
+            }
+        }
+
+        //
+        // private methods
+        //
+
+        function ignoreHost(host) {
+            if (self.domains.indexOf(host) != -1) {
+                // domain is one of ours to track
+                return false;
+            }
+            if (self.domainsIgnore.indexOf(host) != -1) {
+                // domain is one of ours to ignore
+                return true;
+            }
+            if (self.domainsIgnoreIPAddress && /([0-9]{1,3}\.){3}[0-9]{1,3}/.test(host)) {
+                // host is IP address, and we want to ignore these
+                return true;
+            }
+            if (self.domainsIgnoreSubdomains.length > 0) {
+                for (var i = 0; i < self.domains.length; i++) {
+                    var root_domain = self.domains[i].replace(/^www\./, '');
+                    var host_subdomain = host.replace(new RegExp(root_domain.replace('.', '\.') + '$'), '');
+                    if (self.domainsIgnoreSubdomains.indexOf(host_subdomain) != -1) {
+                        // domain matches a subdomain pattern we wish to ignore
+                        return true;
+                    }
+                }
+            }
+            // else - ignore, but warn about unexpected domain
+            self.trackDebugWarn('location.host not contained within configured domains');
+            return true;
+        }
+
+        function doSniff() {
+            if (!self.page) {
+                self.page = detectPage(location.pathname);
+            }
+
+            if (self.overrideReferrer !== undefined) {
+                self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
+                //var referrerParts = self.thisPageTraits['referrer'].match(/https?:\/\/([^/]+)(\/.*)/),
+                //    referrerHost;
+                //if (referrerParts) {
+                //    referrerHost = referrerParts[1];
+                //}
+                //self.thisPageTraits['Referring Domain'] = self.thisPageTraits['$referring_domain'] = referrerHost;
+            }
+
+            trackSession();
+
+            var userTraits = self.adaptor.userTraits();
+
+            if (userTraits.createdAt) {
+                self.globalTraits['Days since signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
+                self.info('Days since signup: ' + self.globalTraits['Days since signup']);
+            }
+
+            if (self.userTraits['email domain']) {
+                self.userTraits['email domain'] = self.userTraits['email domain'].match(/[^@]*$/)[0];
+            } else if (userTraits.email || self.userTraits['email']) {
+                self.userTraits['email domain'] = (userTraits.email || self.userTraits['email']).match(/[^@]*$/)[0];
+            }
+
+            // Fullstory.com session URL
+            if (window.FS && window.FS.getCurrentSessionURL) {
+                // ideally do it instantly so we don't trigger a separate identify() call
+                self.globalTraits['Fullstory URL'] = FS.getCurrentSessionURL();
+            } else {
+                window['_fs_ready'] = function() {
+                    self.adaptor.identify({'Fullstory URL': FS.getCurrentSessionURL()});
+                };
+            }
+
+            if (self.userId) {
+                self.info('Received userId: ' + self.userId);
+                var userTraits = {};
+                for (var key in self.userTraits) {
+                    userTraits['User ' + key] = self.userTraits[key];
+                }
+                var traits = mergeObjects(self.globalTraits, userTraits);
+                var currentUserId;
+                if (!self.adaptor.userId()) {
+                    // session up to here has been anonymous
+                    self.info('Anonymous session until now - alias()');
+                    self.adaptor.alias(self.userId);
+                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
+                    self.adaptor.identify('x');
+                } else {
+                    currentUserId = self.adaptor.userId();
+                    self.info('Current userId: ' + currentUserId);
+                }
+                self.info('identify(' + self.userId + ', [traits])');
+                self.adaptor.identify(self.userId, traits);
+                if (self.userId !== currentUserId) {
+                    self.track('Login');
+                    // TOCHECK
+                    // set time of email verification as the user creation time
+                    self.identifyOnce({createdAt: new Date().toISOString()});
+                    self.info('userId != currentUserId - Login');
+                }
+                setCookie('logged_out', '');
+            } else {
+                self.adaptor.identify(self.globalTraits);
+                if (self.detectLogout === undefined) {
+                    // by default, automatically detect logout if the userId property has been set
+                    //  - even if it's been set to null
+                    self.detectLogout = self.userId !== undefined;
+                }
+                if (self.detectLogout) {
+                    self.info('Detecting potential logout..');
+                    if (self.adaptor.userId()) {
+                        // track only once until next login
+                        if (!getCookie('logged_out')) {
+                            self.track('Logged out');
+                            setCookie('logged_out', true);
+                            self.info('Logged out');
+                        }
+                    }
+                }
+            }
+
+            if (self.trackLandingPage) {
+                trackPage('Landing', self.landingPageTraits);
+            }
+
+            if (self.page) {
+                // if the page contains a vertical bar, separate out the page vs. category
+                var pageParts = self.page.split('|', 2).map(
+                    function(a) {
+                        return a.trim();
+                    }
+                );
+                var args = pageParts.push(self.pageTraits);
+                // track page view
+                trackPage.apply(self, pageParts);
+            } else if (self.trackAllPages) {
+                trackPage('Unidentified');
+            }
+        }
+
+        function detectPage(path) {
+            for (var page in self.trackPages) {
+                var pattern = self.trackPages[page];
+                // we support matching based on string, array or regex
+                if (!Array.isArray(pattern)) {
+                    pattern = [pattern];
+                }
+                for (var i = 0; i < pattern.length; ++i) {
+                    var pat = pattern[i];
+                    if (typeof pat.test === 'function') {
+                        if (pat.test(path)) {
+                            // regex matching URL path - TOCHECK
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
+                    } else if (pat[0] === '.') {
+                        // match body css class
+                        if ((path === location.pathname) &&
+                            document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
+                    // string match - we ignore presence of trailing slash on path
+                    } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
+                        self.info('Detected page: ' + page);
+                        return page;
+                    }
+                }
+            }
+        }
+
+        function trackSession() {
             // visitor first seen
             var firstSeen = getCookie('firstSeen') || new Date().toISOString();
             setCookie('firstSeen', firstSeen, 366);
@@ -418,101 +517,19 @@
                 self.identifyOnce(attributionParamsFirst);
                 self.info('..setting first touch params');
             }
-            analytics.identify(attributionParamsLast);
+            self.adaptor.identify(attributionParamsLast);
             self.info('..setting last touch params');
         }
 
-        this.trackPage = function(one, two, three) {
+        function trackPage(one, two, three) {
             if (typeof three === 'object') {
-                analytics.page(one, two, self.getTraitsToSend(three));          
+                self.adaptor.page(one, two, self.getTraitsToSend(three));
             } else if (typeof two === 'object') {
-                analytics.page(one, self.getTraitsToSend(two));
+                self.adaptor.page(one, self.getTraitsToSend(two));
             } else if (two) {
-                analytics.page(one, two, self.getTraitsToSend());
+                self.adaptor.page(one, two, self.getTraitsToSend());
             } else {
-                analytics.page(one, self.getTraitsToSend());
-            }
-            self.calledPage = true;
-        }
-
-        this.getTraitsToSend = function(traits) {
-            if (typeof traits === 'object') {
-                return mergeObjects(self.thisPageTraits, traits);
-            } else {
-                return self.thisPageTraits;
-            }
-        }
-
-        this.info = function(message) {
-            if (self.logToConsole && window.console && console.log) {
-                if (typeof message === 'object') {
-                    console.log(message);
-                } else {
-                    console.log('[SiteHound] ' + message);
-                }
-            }
-        }
-
-        //
-        // private methods
-        //
-
-        function ignoreHost(host) {
-            if (self.domains.indexOf(host) != -1) {
-                // domain is one of ours to track
-                return false;
-            }
-            if (self.domainsIgnore.indexOf(host) != -1) {
-                // domain is one of ours to ignore
-                return true;
-            }
-            if (self.domainsIgnoreIPAddress && /([0-9]{1,3}\.){3}[0-9]{1,3}/.test(host)) {
-                // host is IP address, and we want to ignore these
-                return true;
-            }
-            if (self.domainsIgnoreSubdomains.length > 0) {
-                for (var i = 0; i < self.domains.length; i++) {
-                    var root_domain = self.domains[i].replace(/^www\./, '');
-                    var host_subdomain = host.replace(new RegExp(root_domain.replace('.', '\.') + '$'), '');
-                    if (self.domainsIgnoreSubdomains.indexOf(host_subdomain) != -1) {
-                        // domain matches a subdomain pattern we wish to ignore
-                        return true;
-                    }
-                }
-            }
-            // else - ignore, but warn about unexpected domain
-            self.trackDebugWarn('location.host not contained within configured domains');
-            return true;
-        }
-
-        function detectPage(path) {
-            for (var page in self.trackPages) {
-                var pattern = self.trackPages[page];
-                // we support matching based on string, array or regex
-                if (!Array.isArray(pattern)) {
-                    pattern = [pattern];
-                }
-                for (var i = 0; i < pattern.length; ++i) {
-                    var pat = pattern[i];
-                    if (typeof pat.test === 'function') {
-                        if (pat.test(path)) {
-                            // regex matching URL path - TOCHECK
-                            self.info('Detected page: ' + page);
-                            return page;
-                        }
-                    } else if (pat[0] === '.') {
-                        // match body css class
-                        if ((path === location.pathname) &&
-                            document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
-                            self.info('Detected page: ' + page);
-                            return page;
-                        }
-                    // string match - we ignore presence of trailing slash on path
-                    } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
-                        self.info('Detected page: ' + page);
-                        return page;
-                    }
-                }
+                self.adaptor.page(one, self.getTraitsToSend());
             }
         }
 
@@ -550,10 +567,6 @@
             } else {
                 return decodeURIComponent(results[1]).replace(/\+/g, ' ');
             }
-        }
-
-        function titleCase(str) {
-            return str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); });
         }
 
         function setCookie(name, value, expiry_days, domain) {
@@ -622,21 +635,21 @@
          * @api public
          */
         function topDomain(hostname) {
-          var levels = domainLevels(hostname);
+            var levels = domainLevels(hostname);
 
-          // Lookup the real top level one.
-          for (var i = 0; i < levels.length; ++i) {
-            var cname = '__tld__';
-            var domain = '.' + levels[i];
+            // Lookup the real top level one.
+            for (var i = 0; i < levels.length; ++i) {
+                var cname = '__tld__';
+                var domain = '.' + levels[i];
 
-            setCookie(cname, 1, 0, domain);
-            if (getCookie(cname)) {
-              setCookie(cname, '', -100, domain);
-              return domain
+                setCookie(cname, 1, 0, domain);
+                if (getCookie(cname)) {
+                    setCookie(cname, '', -100, domain);
+                    return domain
+                }
             }
-          }
 
-          return '';
+            return '';
         };
 
         /**
@@ -647,26 +660,26 @@
          * @api public
          */
         function domainLevels(hostname) {
-          var parts = hostname.split('.');
-          var last = parts[parts.length-1];
-          var levels = [];
+            var parts = hostname.split('.');
+            var last = parts[parts.length-1];
+            var levels = [];
 
-          // Ip address.
-          if (4 == parts.length && parseInt(last, 10) == last) {
+            // Ip address.
+            if (4 == parts.length && parseInt(last, 10) == last) {
+                return levels;
+            }
+
+            // Localhost.
+            if (1 >= parts.length) {
+                return levels;
+            }
+
+            // Create levels.
+            for (var i = parts.length-2; 0 <= i; --i) {
+                levels.push(parts.slice(i).join('.'));
+            }
+
             return levels;
-          }
-
-          // Localhost.
-          if (1 >= parts.length) {
-            return levels;
-          }
-
-          // Create levels.
-          for (var i = parts.length-2; 0 <= i; --i) {
-            levels.push(parts.slice(i).join('.'));
-          }
-
-          return levels;
         };
         //
         // END grab from https://github.com/segmentio/top-domain
@@ -689,10 +702,13 @@
     // public methods
     //
 
+    SiteHound.prototype.identify = function(a, b) {
+        this.adaptor.identify(a, b);
+    }
+
     // like analytics.identify({..}), but only set traits if they're not already set
     SiteHound.prototype.identifyOnce = function(params) {
-        var user = analytics.user();
-        var traits = user.traits(),
+        var traits = this.adaptor.userTraits(),
             new_params = {};
 
         for (var key in params) {
@@ -701,34 +717,32 @@
             }
         }
 
-        analytics.identify(new_params);
+        this.adaptor.identify(new_params);
     }
 
     SiteHound.prototype.track = function(event, traits) {
         if (typeof traits == 'object') {
-            analytics.track(event, this.getTraitsToSend(traits));
+            this.adaptor.track(event, this.getTraitsToSend(traits));
         } else {
-            analytics.track(event, this.getTraitsToSend());
+            this.adaptor.track(event, this.getTraitsToSend());
         }
     }
 
     // similar to identifyOnce, but also track event
     SiteHound.prototype.trackOnce = function(event, params) {
-        var user = analytics.user();
-        var traits = user.traits();
+        var traits = this.adaptor.userTraits();
 
         if (traits['First ' + event] === undefined) {
             var userParams = {};
             userParams['First ' + event] = new Date().toISOString();
 
-            analytics.identify(userParams);
+            this.adaptor.identify(userParams);
             this.track(event, params);
         }
     }
 
     SiteHound.prototype.trackAndCount = function(event, params) {
-        var user = analytics.user();
-        var traits = user.traits();
+        var traits = this.adaptor.userTraits();
 
         var count = 1;
         if (traits) {
@@ -742,16 +756,16 @@
         var identifyTraits = {};
         identifyTraits[event + ' Count'] = count;
         identifyTraits['Last ' + event] = new Date().toISOString();
-        analytics.identify(identifyTraits);
+        this.adaptor.identify(identifyTraits);
         this.track(event, params);
     }
 
     SiteHound.prototype.trackLink = function(elements, name) {
-        analytics.trackLink(elements, name, this.getTraitsToSend());
+        this.adaptor.trackLink(elements, name, this.getTraitsToSend());
     }
 
     SiteHound.prototype.trackForm = function(elements, name) {
-        analytics.trackForm(elements, name, this.getTraitsToSend());
+        this.adaptor.trackForm(elements, name, this.getTraitsToSend());
     }
 
     //
@@ -767,7 +781,7 @@
     }
 
     SiteHound.prototype.trackDebug = function(message, level) {
-        analytics.track('Tracking Debug', {
+        this.adaptor.track('Tracking Debug', {
             message: message,
             level: level,
             'SiteHound library version': this.VERSION
@@ -776,7 +790,7 @@
     }
 
     SiteHound.prototype.trackError = function(error) {
-        analytics.track('Tracking Error', {
+        this.adaptor.track('Tracking Error', {
             name: error.name,
             message: error.message,
             'SiteHound library version': this.VERSION
@@ -784,5 +798,209 @@
         if (window.console && console.error) {
             console.error('[SiteHound] ' + error.name + '; ' + error.message);
         }
+    }
+
+    //
+    // Adaptors
+    //
+
+    function SiteHound_Adaptor_Segment() {
+        var analytics = window.analytics = window.analytics || [],
+            self = this;
+
+        this.check = function() {
+            return typeof window.analytics.ready !== 'undefined';
+        }
+
+        if (!this.check()) {
+            if (window.console && console.error) {
+                console.error('[SiteHound] window.analytics is not initialized - ensure analytics.js snippet is included first');
+            }
+            return;
+        }
+
+        this.calledPage = false;
+        analytics.on('page', function() {
+            self.calledPage = true;
+        });
+
+        this.ready = function(f) {
+            window.analytics.ready(f);
+        }
+
+        this.identify = function(a, b) {
+            window.analytics.identify(a, b);
+        }
+
+        this.track = function(event, traits) {
+            window.analytics.track(event, traits);
+        }
+
+        this.trackLink = function(elements, event, traits) {
+            window.analytics.trackLink(elements, event, traits);
+        }
+
+        this.trackForm = function(elements, event, traits) {
+            window.analytics.trackForm(elements, event, traits);
+        }
+
+        this.page = function(a, b, c) {
+            self.calledPage = true;
+            window.analytics.page(a, b, c);
+        }
+
+        this.alias = function(to) {
+            window.analytics.alias(to);
+        }
+
+        this.userId = function() {
+            var user = window.analytics.user();
+            return user ? user.id() : undefined;
+        }
+
+        this.userTraits = function() {
+            var user = window.analytics.user();
+            var traits = user.traits();
+            return traits;
+        }
+
+        this.afterSniff = function() {
+            if (!self.calledPage) {
+                // Segment.com requires we call page() at least once
+                window.analytics.page();
+            }
+        }
+    }
+
+    function SiteHound_Adaptor_Mixpanel() {
+        var mixpanel = window.mixpanel = window.mixpanel || [],
+            self = this;
+
+        this.check = function() {
+            // TODO
+            return typeof window.mixpanel.ready !== 'undefined';
+        }
+
+        if (!this.check()) {
+            if (window.console && console.error) {
+                console.error('[SiteHound] window.mixpanel is not initialized - ensure Mixpanel snippet is included first');
+            }
+        }
+
+        this.ready = function(f) {
+            // TODO
+            window.mixpanel.ready(f);
+        }
+
+        this.identify = function(a, b) {
+            // TODO
+            var id, traits;
+            if (typeof a === 'object') {
+                traits = a;
+            } else {
+                id = a;
+                traits = b;
+            }
+            if (id) window.mixpanel.identify(id);
+
+            var traitAliases = {
+                created: '$created',
+                email: '$email',
+                firstName: '$first_name',
+                lastName: '$last_name',
+                lastSeen: '$last_seen',
+                name: '$name',
+                username: '$username',
+                phone: '$phone'
+            };
+
+            // TODO
+            // var username = identify.username();
+            // var email = identify.email();
+            // var id = identify.userId();
+            // var nametag = email || username || id;
+            // if (nametag) window.mixpanel.name_tag(nametag);
+
+            // TODO: var traits = identify.traits(traitAliases);
+            // if (traits.$created) del(traits, 'createdAt');
+
+            window.mixpanel.register(traits); // TOCHECK: analytics.js does dates(traits, iso)
+            window.mixpanel.people.set(traits); // TOCHECK: do we always want to enable people tracking?
+        }
+
+        this.track = function(event, traits) {
+            // TODO
+
+            if (typeof traits === 'object') {
+                // delete mixpanel's reserved properties, so they don't conflict
+                delete traits.distinct_id;
+                delete traits.ip;
+                delete traits.mp_name_tag;
+                delete traits.mp_note;
+                delete traits.token;
+            }
+
+            // track the event
+            // TODO: props = dates(props, iso);
+            window.mixpanel.track(event, traits);
+        }
+
+        this.trackLink = function(elements, event, traits) {
+            // TODO
+            window.mixpanel.track_links(elements, event, traits);
+        }
+
+        this.trackForm = function(elements, event, traits) {
+            // TODO
+            window.mixpanel.track_forms(elements, event, traits);
+        }
+
+        this.page = function(a, b, c) {
+            self.calledPage = true;
+
+            var name, traits;
+            if (typeof a === 'object') {
+                traits = a;
+            } else if (typeof b === 'object') {
+                name = a;
+                traits = b;
+            } else if (typeof c === 'object') {
+                name = a + ' ' + b;
+                traits = c;
+            }
+            // TODO
+            //  use track_pageview here?
+            window.mixpanel.track_pageview('Viewed ' + name + ' Page', traits);
+        }
+
+        this.alias = function(to) {
+            var mp = window.mixpanel;
+            if (mp.get_distinct_id && mp.get_distinct_id() === to) return;
+            // HACK: internal mixpanel API to ensure we don't overwrite
+            // - as per Analytics.js Mixpanel plugin
+            if (mp.get_property && mp.get_property('$people_distinct_id') === to) return;
+            //
+            mp.alias(to);
+        }
+
+        this.userId = function() {
+            return window.mixpanel.get_distinct_id();
+        }
+
+        this.userTraits = function() {
+            // TODO
+            var traits = window.mixpanel.people.get();
+            return traits;
+        }
+    }
+
+    //
+    // utility methods
+    //
+
+    function titleCase(str) {
+        return typeof str === 'string'
+            ? str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); })
+            : str;
     }
 }();
