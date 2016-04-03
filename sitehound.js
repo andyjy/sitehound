@@ -72,8 +72,7 @@
             // detect and re-run tracking if the window.location changes?
             detectURLChange: true,
             detectHashChange: false,
-            // whitelist domains on which to run tracking
-            domains: location.host,
+            //
             domainsIgnore: ['localhost'],
             domainsIgnoreIPAddress: true,
             domainsIgnoreSubdomains: ['staging', 'test'],
@@ -94,7 +93,7 @@
             //
             sessionTimeout: 30, // minutes
             //
-            overrideReferrer: undefined,
+            overrideReferrer: undefined
         };
 
         var self = this;
@@ -216,31 +215,22 @@
         //
 
         function ignoreHost(host) {
-            if (self.domains.indexOf(host) != -1) {
-                // domain is one of ours to track
-                return false;
-            }
             if (self.domainsIgnore.indexOf(host) != -1) {
-                // domain is one of ours to ignore
+                // domain is one we've specifically listed to ignore
                 return true;
             }
             if (self.domainsIgnoreIPAddress && /([0-9]{1,3}\.){3}[0-9]{1,3}/.test(host)) {
                 // host is IP address, and we want to ignore these
                 return true;
             }
-            if (self.domainsIgnoreSubdomains.length > 0) {
-                for (var i = 0; i < self.domains.length; i++) {
-                    var root_domain = self.domains[i].replace(/^www\./, '');
-                    var host_subdomain = host.replace(new RegExp(root_domain.replace('.', '\.') + '$'), '');
-                    if (self.domainsIgnoreSubdomains.indexOf(host_subdomain) != -1) {
-                        // domain matches a subdomain pattern we wish to ignore
-                        return true;
-                    }
+            for (var i = 0; i < self.domainsIgnoreSubdomains.length; i++) {
+                if (host.indexOf(self.domainsIgnoreSubdomains[0] + '.') == 0) {
+                    // host matches a subdomain pattern we wish to ignore
+                    return true;
                 }
             }
-            // else - ignore, but warn about unexpected domain
-            self.trackDebugWarn('location.host not contained within configured domains');
-            return true;
+            // else
+            return false;
         }
 
         function doSniff() {
@@ -474,13 +464,11 @@
                 referrerHost = referrerParts[1];
                 referrerPath = referrerParts[2];
             }
-            // is the referrer from a host we should have (a) tracking on, and (b) set a cookie for, AND can read the cookie on this host?
-            //  => referrer is one of domains AND current host is either the same domain as the referrer, or current host is a subdomain of the referrer
-            if ((referrerHost === location.host) || ((self.domains.indexOf(referrerHost) !== -1) && ((location.host + '/').indexOf(referrerHost + '/') !== -1))) {
-                // first cookie, but referrer from one of our domains - did the original landing page not have tracking?
-                // Do we want to track the referrer as the original landing page?
+            // This is the first page on which we've tracked this user, so if the referrer is from the same domain,
+            // then the referring page (likely the original landing page?) didn't have our tracking code implemented
+            if (referrerHost === location.host) {
+                // Did we specify to track this particular referrer as the original landing page?
                 if (self.trackReferrerLandingPages.indexOf(referrerPath) !== -1) {
-                    // track landing page view for our previously untracked referrer
                     self.info('Detected known untracked landing page: ' + document.referrer);
                     self.trackLandingPage = true;
                     self.landingPageTraits = {
@@ -499,14 +487,10 @@
                     self.trackDebugWarn('Landing page with local referrer - tracking code not on all pages?');
                 }
             } else {
-                if ((referrerHost != location.host) && self.domains.indexOf(referrerHost) !== -1) {
-                    self.trackDebugInfo('Landing page with referrer from one of our other domains');
-                } else {
-                    self.trackLandingPage = true;
-                    attributionParams['Landing page'] = location.pathname;
-                    attributionParams['Referrer'] = document.referrer ? document.referrer : null;
-                    attributionParams['Referrer domain'] = referrerHost;
-                }
+                self.trackLandingPage = true;
+                attributionParams['Landing page'] = location.pathname;
+                attributionParams['Referrer'] = document.referrer ? document.referrer : null;
+                attributionParams['Referrer domain'] = referrerHost;
             }
 
             // add some additional metadata
