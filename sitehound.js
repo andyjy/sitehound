@@ -1,18 +1,18 @@
 //
-// SiteHound - Easy & powerful user, session and event tracking
+//  SiteHound - Easy & powerful user, session and event tracking
 //
-// Supports tracking events to:
-// - Segment.com's analytics.js
-// - mixpanel.js
+//  Supports tracking events to:
+//  - Segment.com's analytics.js
+//  - mixpanel.js
 // 
-// ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
+//  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
-// @author        Andy Young // @andyy // andy@apexa.co.uk
-// @version       0.8 - 3rd April 2016
-// @licence       GNU GPL v3
-//
+//  @author        Andy Young // @andyy // andy@apexa.co.uk
+//  @version       0.8 - 3rd April 2016
+//  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
+//
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -64,35 +64,49 @@
 
     function SiteHound(initialConfig, adaptor) {
         var config = {
-            // names and paths of key pages we want to track
-            // paths can be simple string matches, arrays, or regular expressions
+            // object mapping names to match patterns for key pages we want to track
+            // - by default we match against the page URL (location.pathname)
+            // - strings beginning with a '.' match css classes on the <body>
+            // match patterns can be simple strings, arrays, or regular expressions
             trackPages: null,
-            // track all other pageviews? (as "unidentified")
+            // override detection of the current page (and therefore track this pageview event)
+            page: null,
+            // track all other pageviews not covered above? (as "unidentified")
             trackAllPages: false,
-            // detect and re-run tracking if the window.location changes?
+            // detect and track new pageview events if the window.location changes?
             detectURLChange: true,
             detectHashChange: false,
-            //
+
+            // disable tracking on particular hosts
             domainsIgnore: ['localhost'],
             domainsIgnoreIPAddress: true,
             domainsIgnoreSubdomains: ['staging', 'test'],
-            // any un-tagged pages we want to track as the actual landing page if discovered in the referrer?
+
+            // if we have any landing pages without this tracking installed, list them here
+            // in order to track them as the "true" landing page when the user clicks through to
+            // a page with tracking
             trackReferrerLandingPages: [],
-            page: null,
-            pageTraits: {},
+
             // traits to set globally for this user/session
             globalTraits: {},
-            // traits that we only want to pass on calls to analytics.[track|page] on this pageview
+            // traits to set only on any page event we may trigger during this pageview
+            pageTraits: {},
+            // traits to set on all events during this pageview, but not set globally for subsequent pageviews
             thisPageTraits: {},
-            //
+
+            // do we have an ID for a logged-in user?
             userId: undefined,
+            // traits to set on the user (like globalTraits, but will be prefixed with "User " to distinguish them)
             userTraits: {},
+            // should we fire a logout event on this page if we don't have a userId set but were previously logged in?
+            // - defaults to true if we've passed a value (incl. null), false otherwise
             detectLogout: undefined,
-            //
+
+            // log informational messages to the console?
             logToConsole: false,
-            //
-            sessionTimeout: 30, // minutes
-            //
+            // session timeout before tracking the start of a new session (in minutes)
+            sessionTimeout: 30,
+            // provide an overridden referrer to replce in when tracking on this page
             overrideReferrer: undefined
         };
 
@@ -148,6 +162,7 @@
                 // replay any events queued up by the snippet before the lib was loaded
                 replayQueue();
 
+                // beyond this point should only be executed once per pageview
                 if (self.sniffed) {
                     return;
                 }
@@ -248,15 +263,15 @@
                 //self.thisPageTraits['Referring Domain'] = self.thisPageTraits['$referring_domain'] = referrerHost;
             }
 
+            // track data related to the current session
             trackSession();
 
+            // some user-related properties
             var userTraits = self.adaptor.userTraits();
-
             if (userTraits.createdAt) {
                 self.globalTraits['Days since signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
                 self.info('Days since signup: ' + self.globalTraits['Days since signup']);
             }
-
             if (self.userTraits['email domain']) {
                 self.userTraits['email domain'] = self.userTraits['email domain'].match(/[^@]*$/)[0];
             } else if (userTraits.email || self.userTraits['email']) {
@@ -277,7 +292,11 @@
                 };
             }
 
+            //
+            // identify(), including user tracking as relevnt
+            //
             if (self.userId) {
+                // we have a logged-in user
                 self.info('Received userId: ' + self.userId);
                 var userTraits = {};
                 for (var key in self.userTraits) {
@@ -297,8 +316,7 @@
                 }
                 self.info('identify(' + self.userId + ', [traits])');
                 if (self.userId !== currentUserId) {
-                    // TOCHECK
-                    // set time of email verification as the user creation time
+                    // TOCHECK - set time of email verification as the user creation time
                     traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
                 }
                 self.adaptor.identify(self.userId, traits);
@@ -306,17 +324,17 @@
                     self.info('userId != currentUserId - Login');
                     self.track('Login');
                 }
-                setCookie('logged_out', '');
+                setCookie('logged_out', '', -100);
             } else {
+                // no information about whether the user is currently logged in
                 self.adaptor.identify(self.globalTraits);
-                if (self.detectLogout === undefined) {
-                    // by default, automatically detect logout if the userId property has been set
-                    //  - even if it's been set to null
-                    self.detectLogout = self.userId !== undefined;
-                }
+                // by default, automatically detect logout if the userId property has been set
+                //  - even if it's been set to null
+                self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
                 if (self.detectLogout) {
                     self.info('Detecting potential logout..');
                     if (self.adaptor.userId()) {
+                        // we were logged in earlier in the session
                         // track only once until next login
                         if (!getCookie('logged_out')) {
                             self.track('Logged out');
@@ -327,10 +345,12 @@
                 }
             }
 
+            // track landing page event?
             if (self.trackLandingPage) {
                 trackPage('Landing', self.landingPageTraits);
             }
 
+            // track page view event?
             if (self.page) {
                 // if the page contains a vertical bar, separate out the page vs. category
                 var pageParts = self.page.split('|', 2).map(
@@ -339,7 +359,6 @@
                     }
                 );
                 var args = pageParts.push(self.pageTraits);
-                // track page view
                 trackPage.apply(self, pageParts);
             } else if (self.trackAllPages) {
                 trackPage('Unidentified');
@@ -627,10 +646,8 @@
             return newParams;
         }
 
-        //
         // Modified from https://github.com/segmentio/top-domain v2.0.1
         // @TODO: learn how to javascript good
-        //
         /**
          * Get the top domain.
          *
@@ -641,79 +658,64 @@
          * The method returns an empty string when the hostname
          * is an ip or `localhost`.
          *
-         * Example levels:
-         *
-         *      domain('www.google.co.uk');
-         *      // => ["co.uk", "google.co.uk", "www.google.co.uk"]
-         *
          * Example:
          *
+         *      domain('segment.io');
+         *      // => 'segment.io'
+         *      domain('www.segment.io');
+         *      // => 'segment.io'
          *      domain('localhost');
          *      // => ''
          *      domain('dev');
          *      // => ''
          *      domain('127.0.0.1');
          *      // => ''
-         *      domain('segment.io');
-         *      // => 'segment.io'
-         *
-         * @param {String} url
-         * @return {String}
-         * @api public
          */
         function topDomain(hostname) {
             var levels = domainLevels(hostname);
-
             // Lookup the real top level one.
             for (var i = 0; i < levels.length; ++i) {
                 var cname = '__tld__';
                 var domain = '.' + levels[i];
-
                 setCookie(cname, 1, 0, domain);
                 if (getCookie(cname)) {
                     setCookie(cname, '', -100, domain);
                     return domain
                 }
             }
-
             return '';
         };
 
         /**
-         * Levels returns all levels of the given url.
+         * Returns all levels of the given url
          *
-         * @param {String} url
-         * @return {Array}
-         * @api public
+         * Example:
+         *
+         *      domain('www.google.co.uk');
+         *      // => ["co.uk", "google.co.uk", "www.google.co.uk"]
          */
         function domainLevels(hostname) {
             var parts = hostname.split('.');
             var last = parts[parts.length-1];
             var levels = [];
-
             // Ip address.
             if (4 == parts.length && parseInt(last, 10) == last) {
                 return levels;
             }
-
             // Localhost.
             if (1 >= parts.length) {
                 return levels;
             }
-
             // Create levels.
             for (var i = parts.length-2; 0 <= i; --i) {
                 levels.push(parts.slice(i).join('.'));
             }
-
             return levels;
         };
-        //
         // END grab from https://github.com/segmentio/top-domain
-        //
 
         //
-        // ready? 
+        // final initialisation steps
         //
         this.info('Ready (v' + VERSION + ')');
 
