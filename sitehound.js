@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.87 - 4th April 2016
+//  @version       0.88 - 4th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.87";
+    var VERSION = "0.88";
 
     !function() {
         var initialConfig = window.sitehound || {};
@@ -92,7 +92,9 @@
             overrideReferrer: undefined
         };
 
-        var self = this;
+        var self = this,
+            sniffed = false,
+            queue = [];
 
         this.adaptor = adaptor;
         if ((typeof adaptor !== 'object') || !adaptor.check()) {
@@ -133,6 +135,9 @@
                     return;
                 }
 
+                // replay any ready() events queued up by the snippet before the lib was loaded
+                replayReady();
+
                 // core tracking for on page load
                 doSniff();
 
@@ -141,14 +146,15 @@
                     self.adaptor.afterSniff();
                 }
 
-                // replay any events queued up by the snippet before the lib was loaded
-                replayQueue();
-
                 // beyond this point should only be executed once per pageview
                 if (self.sniffed) {
                     return;
                 }
                 self.sniffed = true;
+
+                // replay any remaining events queued up by the snippet before the lib was loaded
+                // or calls since the lib was loaded but queued for post-sniffing
+                replayQueue();
 
                 // auto-detect URL change and re-trigger sniffing for any future virtual pageviews
                 if ((self.detectURLChange || self.detectHashChange) && !intervalId) {
@@ -174,8 +180,18 @@
             }
         }
 
+        this.deferUntilSniff = function(method, args) {
+            if (self.sniffed) {
+                // already sniffed - no need to defer
+                return false;
+            } // else - defer until we've sniffed
+            self.queue.push([method, args]);
+            return true;
+        }
+
         // like analytics.identify({..}), but only set traits if they're not already set
         this.identifyOnce = function(params) {
+            if (self.deferUntilSniff('identifyOnce', arguments)) {return;}
             self.adaptor.identify(self.ignoreExistingTraits(params));
         }
 
@@ -553,30 +569,44 @@
             }
         }
 
+        function replayReady() {
+            replay(getQueue(['ready']));
+        }
+
         function replayQueue() {
+            replay(getQueue());
+            replay(self.queue);
+        }
+
+        function getQueue(methods) {
             if (!initialConfig.queue || !initialConfig.queue.length) {
                 return;
             }
-            function replay(queue) {
-                while (queue && queue.length > 0) {
-                    var args = queue.shift();
-                    var method = args.shift();
-                    if (self[method]) {
-                        self[method].apply(self, args);
-                    }
-                }
+            if (!methods || !methods.length) {
+                var queue = initialConfig.queue;
+                initialConfig.queue = [];
+                return queue;
             }
-            // replay ready() calls before all others
-            var first = [], second = [];
+            var selected = [], remaining = [];
             for (var i = 0; i < initialConfig.queue.length; i++) {
-                if (initialConfig.queue[i][0] === 'ready') {
-                    first.push(initialConfig.queue[i]);
+                if (methods.indexOf(initialConfig.queue[i][0]) !== -1) {
+                    selected.push(initialConfig.queue[i]);
                 } else {
-                    second.push(initialConfig.queue[i]);
+                    remaining.push(initialConfig.queue[i]);
                 }
             }
-            replay(first);
-            replay(second);
+            initialConfig.queue = remaining;
+            return selected;
+        }
+
+        function replay(queue) {
+            while (queue && queue.length > 0) {
+                var args = queue.shift();
+                var method = args.shift();
+                if (self[method]) {
+                    self[method].apply(self, args);
+                }
+            }
         }
 
         function getUTMParams() {
@@ -742,10 +772,14 @@
     //
 
     SiteHound.prototype.identify = function(a, b) {
+        if (this.deferUntilSniff('identify', arguments)) {return;}
+
         this.adaptor.identify(a, b);
     }
 
     SiteHound.prototype.track = function(event, traits) {
+        if (this.deferUntilSniff('track', arguments)) {return;}
+
         if (typeof traits == 'object') {
             this.adaptor.track(event, this.getTraitsToSend(traits));
         } else {
@@ -755,6 +789,8 @@
 
     // similar to identifyOnce, but also track event
     SiteHound.prototype.trackOnce = function(event, params) {
+        if (this.deferUntilSniff('trackOnce', arguments)) {return;}
+
         var traits = this.adaptor.userTraits();
 
         if (traits['First ' + event] === undefined) {
@@ -767,6 +803,8 @@
     }
 
     SiteHound.prototype.trackAndCount = function(event, params) {
+        if (this.deferUntilSniff('trackAndCount', arguments)) {return;}
+
         var traits = this.adaptor.userTraits();
 
         var count = 1;
@@ -786,10 +824,14 @@
     }
 
     SiteHound.prototype.trackLink = function(elements, name) {
+        if (this.deferUntilSniff('trackLink', arguments)) {return;}
+
         this.adaptor.trackLink(elements, name, this.getTraitsToSend());
     }
 
     SiteHound.prototype.trackForm = function(elements, name) {
+        if (this.deferUntilSniff('trackForm', arguments)) {return;}
+
         this.adaptor.trackForm(elements, name, this.getTraitsToSend());
     }
 
