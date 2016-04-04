@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.91 - 4th April 2016
+//  @version       0.92 - 4th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.91";
+    var VERSION = "0.92";
 
     !function() {
         var initialConfig = window.sitehound || {};
@@ -415,12 +415,14 @@
             // session start + last updated time
             var sessionStarted = getCookie('sessionStarted') || new Date().toISOString(),
                 sessionUpdated = getCookie('sessionUpdated') || new Date().toISOString();
-            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60);
+            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60),
+                sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
             self.globalTraits['Session started'] = sessionStarted;
             self.globalTraits['Minutes since session start'] = sessionDuration;
             self.info('Session started: ' + sessionStarted);
             self.info('Session duration: ' + sessionDuration);
-            var sessionTimedOut = sessionDuration > self.sessionTimeout;
+            self.info('Minutes since last event: ' + sessionSilent);
+            var sessionTimedOut = sessionSilent > self.sessionTimeout;
             if (sessionTimedOut) {
                 self.info('Session timed out - tracking as new session');
                 sessionStarted = new Date().toISOString();
