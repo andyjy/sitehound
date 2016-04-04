@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.89 - 4th April 2016
+//  @version       0.90 - 4th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.89";
+    var VERSION = "0.90";
 
     !function() {
         var initialConfig = window.sitehound || {};
@@ -139,6 +139,7 @@
                 // replay any ready() events queued up by the snippet before the lib was loaded
                 replayReady();
 
+                var firstSniff = !self.sniffed;
                 // core tracking for on page load
                 doSniff();
 
@@ -148,10 +149,9 @@
                 }
 
                 // beyond this point should only be executed once per pageview
-                if (self.sniffed) {
+                if (!firstSniff) {
                     return;
                 }
-                self.sniffed = true;
 
                 // replay any remaining events queued up by the snippet before the lib was loaded
                 // or calls since the lib was loaded but queued for post-sniffing
@@ -186,7 +186,7 @@
                 // already sniffed - no need to defer
                 return false;
             } // else - defer until we've sniffed
-            self.queue.push([method, args]);
+            self.queue.push(args.unshift(method));
             return true;
         }
 
@@ -282,6 +282,9 @@
         }
 
         function doSniff() {
+            // set this now so our tracking calls execute immediately without deferUntilSniff()
+            self.sniffed = true;
+
             if (!self.page) {
                 self.page = self.detectPage(location.pathname);
             }
