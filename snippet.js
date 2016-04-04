@@ -2,7 +2,7 @@
     var sitehound = window.sitehound = window.sitehound || {};
 
     var SCRIPT_URL = ('https:' === document.location.protocol ? 'https://' : 'http://')
-        + 'andyyoung.github.io/sitehound/sitehound.js';
+        + 'andyyoung.github.io/sitehound/sitehound-min.js';
 
     if (!sitehound.sniff) {
         // sitehound.js not yet loaded
