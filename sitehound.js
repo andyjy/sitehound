@@ -572,9 +572,9 @@
             var first = [], second = [];
             for (var i = 0; i < initialConfig.queue.length; i++) {
                 if (initialConfig.queue[i][0] === 'ready') {
-                    first.push(initialConfig.queue[i][0]);
+                    first.push(initialConfig.queue[i]);
                 } else {
-                    second.push(initialConfig.queue[i][0]);
+                    second.push(initialConfig.queue[i]);
                 }
             }
             replay(first);
