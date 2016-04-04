@@ -337,9 +337,9 @@
                         // we were logged in earlier in the session
                         // track only once until next login
                         if (!getCookie('logged_out')) {
-                            self.track('Logged out');
+                            self.track('Logout');
                             setCookie('logged_out', true);
-                            self.info('Logged out');
+                            self.info('Logout');
                         }
                     }
                 }
@@ -459,7 +459,7 @@
                 'UTM Content',
                 'Landing page',
                 'Landing page type',
-                'Referrer',
+                'Referrer', // TOCHECK
                 'Referrer domain',
                 'Referrer type'
             ];
@@ -833,11 +833,11 @@
     }
 
     function SiteHound_Adaptor_Segment() {
-        var analytics = window.analytics = window.analytics || [],
-            self = this;
+        window.analytics = window.analytics || [];
+        var self = this;
 
         this.check = function() {
-            return typeof window.analytics.ready !== 'undefined';
+            return typeof analytics.ready !== 'undefined';
         }
 
         if (!this.check()) {
@@ -853,41 +853,41 @@
         });
 
         this.ready = function(f) {
-            window.analytics.ready(f);
+            analytics.ready(f);
         }
 
         this.identify = function(a, b) {
-            window.analytics.identify(a, b);
+            analytics.identify(a, b);
         }
 
         this.track = function(event, traits) {
-            window.analytics.track(event, traits);
+            analytics.track(event, traits);
         }
 
         this.trackLink = function(elements, event, traits) {
-            window.analytics.trackLink(elements, event, traits);
+            analytics.trackLink(elements, event, traits);
         }
 
         this.trackForm = function(elements, event, traits) {
-            window.analytics.trackForm(elements, event, traits);
+            analytics.trackForm(elements, event, traits);
         }
 
         this.page = function(a, b, c) {
             self.calledPage = true;
-            window.analytics.page(a, b, c);
+            analytics.page(a, b, c);
         }
 
         this.alias = function(to) {
-            window.analytics.alias(to);
+            analytics.alias(to);
         }
 
         this.userId = function() {
-            var user = window.analytics.user();
+            var user = analytics.user();
             return user ? user.id() : undefined;
         }
 
         this.userTraits = function() {
-            var user = window.analytics.user();
+            var user = analytics.user();
             var traits = user.traits();
             return traits;
         }
@@ -895,18 +895,18 @@
         this.afterSniff = function() {
             if (!self.calledPage) {
                 // Segment.com requires we call page() at least once
-                window.analytics.page();
+                analytics.page();
             }
         }
     }
 
     function SiteHound_Adaptor_Mixpanel() {
-        var mixpanel = window.mixpanel = window.mixpanel || [],
-            self = this;
+        window.mixpanel = window.mixpanel || [];
+        var self = this;
 
         this.check = function() {
             // TODO
-            return typeof window.mixpanel.ready !== 'undefined';
+            return typeof mixpanel.ready !== 'undefined';
         }
 
         if (!this.check()) {
@@ -917,7 +917,7 @@
 
         this.ready = function(f) {
             // TODO
-            window.mixpanel.ready(f);
+            mixpanel.ready(f);
         }
 
         this.identify = function(a, b) {
@@ -929,7 +929,7 @@
                 id = a;
                 traits = b;
             }
-            if (id) window.mixpanel.identify(id);
+            if (id) mixpanel.identify(id);
 
             var traitAliases = {
                 created: '$created',
@@ -947,13 +947,13 @@
             // var email = identify.email();
             // var id = identify.userId();
             // var nametag = email || username || id;
-            // if (nametag) window.mixpanel.name_tag(nametag);
+            // if (nametag) mixpanel.name_tag(nametag);
 
             // TODO: var traits = identify.traits(traitAliases);
             // if (traits.$created) del(traits, 'createdAt');
 
-            window.mixpanel.register(traits); // TOCHECK: analytics.js does dates(traits, iso)
-            window.mixpanel.people.set(traits); // TOCHECK: do we always want to enable people tracking?
+            mixpanel.register(traits); // TOCHECK: analytics.js does dates(traits, iso)
+            mixpanel.people.set(traits); // TOCHECK: do we always want to enable people tracking?
         }
 
         this.track = function(event, traits) {
@@ -970,17 +970,17 @@
 
             // track the event
             // TODO: props = dates(props, iso);
-            window.mixpanel.track(event, traits);
+            mixpanel.track(event, traits);
         }
 
         this.trackLink = function(elements, event, traits) {
             // TODO
-            window.mixpanel.track_links(elements, event, traits);
+            mixpanel.track_links(elements, event, traits);
         }
 
         this.trackForm = function(elements, event, traits) {
             // TODO
-            window.mixpanel.track_forms(elements, event, traits);
+            mixpanel.track_forms(elements, event, traits);
         }
 
         this.page = function(a, b, c) {
@@ -998,26 +998,25 @@
             }
             // TODO
             //  use track_pageview here?
-            window.mixpanel.track_pageview('Viewed ' + name + ' Page', traits);
+            mixpanel.track_pageview('Viewed ' + name + ' Page', traits);
         }
 
         this.alias = function(to) {
-            var mp = window.mixpanel;
-            if (mp.get_distinct_id && mp.get_distinct_id() === to) return;
+            if (mixpanel.get_distinct_id && mixpanel.get_distinct_id() === to) return;
             // HACK: internal mixpanel API to ensure we don't overwrite
             // - as per Analytics.js Mixpanel plugin
-            if (mp.get_property && mp.get_property('$people_distinct_id') === to) return;
+            if (mixpanel.get_property && mixpanel.get_property('$people_distinct_id') === to) return;
             //
-            mp.alias(to);
+            mixpanel.alias(to);
         }
 
         this.userId = function() {
-            return window.mixpanel.get_distinct_id();
+            return mixpanel.get_distinct_id();
         }
 
         this.userTraits = function() {
             // TODO
-            var traits = window.mixpanel.people.get();
+            var traits = mixpanel.people.get();
             return traits;
         }
     }
