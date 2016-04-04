@@ -286,7 +286,7 @@
 
         function doSniff() {
             if (!self.page) {
-                self.page = detectPage(location.pathname);
+                self.page = self.detectPage(location.pathname);
             }
 
             if (self.overrideReferrer !== undefined) {
@@ -522,7 +522,7 @@
                 attributionParams['Landing page type'] = self.page;
             }
             if (attributionParams['Referrer domain'] == location.host) {
-                attributionParams['Referrer type'] = detectPage(referrerPath);
+                attributionParams['Referrer type'] = self.detectPage(referrerPath);
             }
 
             // automatic attribution detection
