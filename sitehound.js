@@ -33,20 +33,25 @@
     !function() {
         var initialConfig = window.sitehound || {};
 
-        // initialize adaptor for the analytics library we want to use
-        var adaptorClass = titleCase(initialConfig.adaptor) || 'Segment';
-        try {
-            var adaptor = eval('new SiteHound_Adaptor_' + adaptorClass);
-        } catch (error) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] adaptor class SiteHound_Adaptor_' + adaptorClass + " could not be loaded");
-                console.error('[SiteHound] ' + error.name + '; ' + error.message);
+        var adaptorClass;
+        if (typeof initialConfig.adaptor !== 'object') {
+            // initialize adaptor for the analytics library we want to use
+            adaptorClass = titleCase(initialConfig.adaptor) || 'Segment';
+            try {
+                var adaptor = eval('new SiteHound_Adaptor_' + adaptorClass);
+            } catch (error) {
+                if (window.console && console.error) {
+                    console.error('[SiteHound] adaptor class SiteHound_Adaptor_' + adaptorClass + " could not be loaded");
+                    console.error('[SiteHound] ' + error.name + '; ' + error.message);
+                }
+                return;
             }
-            return;
+        } else {
+            var adaptor = initialConfig.adaptor;
         }
         if (!adaptor.check()) {
             if (window.console && console.error) {
-                console.error('[SiteHound] failed to attach to ' + adaptorClass);
+                console.error('[SiteHound] failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
             }
             return;
         }
