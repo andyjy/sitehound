@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.90 - 4th April 2016
+//  @version       0.91 - 4th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.90";
+    var VERSION = "0.91";
 
     !function() {
         var initialConfig = window.sitehound || {};
@@ -310,8 +310,8 @@
             }
             if (self.userTraits['email domain']) {
                 self.userTraits['email domain'] = self.userTraits['email domain'].match(/[^@]*$/)[0];
-            } else if (userTraits.email || self.userTraits['email']) {
-                self.userTraits['email domain'] = (userTraits.email || self.userTraits['email']).match(/[^@]*$/)[0];
+            } else if (userTraits.email || userTraits.Email || self.userTraits['email']) {
+                self.userTraits['email domain'] = (userTraits.email || userTraits.Email || self.userTraits['email']).match(/[^@]*$/)[0];
             }
 
             // Fullstory.com session URL
@@ -336,7 +336,8 @@
                 self.info('Received userId: ' + self.userId);
                 var userTraits = {};
                 for (var key in self.userTraits) {
-                    userTraits['User ' + key] = self.userTraits[key];
+                    var newKey = (['name', 'email'].indexOf(key.toLowerCase()) !== -1) ? key.toLowerCase() : 'User ' + key;
+                    userTraits[newKey] = self.userTraits[key];
                 }
                 var traits = mergeObjects(self.globalTraits, userTraits);
                 var currentUserId;
