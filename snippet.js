@@ -20,6 +20,10 @@
         sitehound.queue = [];
 
         var methods = [
+            'doNotTrack',
+            'identify',
+            'identifyOnce',
+            'ready',
             'track',
             'trackAndCount',
             'trackLink',
@@ -48,7 +52,7 @@
             sitehound.isDone = true;
         }
 
-        sitehound.SNIPPET_VERSION = '1.2';
+        sitehound.SNIPPET_VERSION = '1.3';
 
         sitehound.load = function(adaptor) {
             sitehound.adaptor = adaptor;

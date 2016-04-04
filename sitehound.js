@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.82 - 4th April 2016
+//  @version       0.85 - 4th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,33 +28,12 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.82";
+    var VERSION = "0.85";
 
     !function() {
         var initialConfig = window.sitehound || {};
 
-        var adaptorClass;
-        if (typeof initialConfig.adaptor !== 'object') {
-            // initialize adaptor for the analytics library we want to use
-            adaptorClass = titleCase(initialConfig.adaptor) || 'Segment';
-            try {
-                var adaptor = eval('new SiteHound_Adaptor_' + adaptorClass);
-            } catch (error) {
-                if (window.console && console.error) {
-                    console.error('[SiteHound] adaptor class SiteHound_Adaptor_' + adaptorClass + " could not be loaded");
-                    console.error('[SiteHound] ' + error.name + '; ' + error.message);
-                }
-                return;
-            }
-        } else {
-            var adaptor = initialConfig.adaptor;
-        }
-        if (!adaptor.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
-            }
-            return;
-        }
+        var adaptor = getAdaptor(initialConfig.adaptor);
 
         // initialize SiteHound when our adaptor's target library is ready
         adaptor.ready(function() {
@@ -203,6 +182,9 @@
         }
 
         this.detectPage = function(path) {
+            if (path === undefined) {
+                path = location.pathname;
+            }
             for (var page in self.trackPages) {
                 var pattern = self.trackPages[page];
                 // we support matching based on string, array or regex
@@ -574,13 +556,29 @@
         }
 
         function replayQueue() {
-            while (initialConfig.queue && initialConfig.queue.length > 0) {
-                var args = initialConfig.queue.shift();
-                var method = args.shift();
-                if (self[method]) {
-                    self[method].apply(self, args);
+            if (!initialConfig.queue || !initialConfig.queue.length) {
+                return;
+            }
+            function replay(queue) {
+                while (queue && queue.length > 0) {
+                    var args = queue.shift();
+                    var method = args.shift();
+                    if (self[method]) {
+                        self[method].apply(self, args);
+                    }
                 }
             }
+            // replay ready() calls before all others
+            var first = [], second = [];
+            for (var i = 0; i < initialConfig.queue.length; i++) {
+                if (initialConfig.queue[i][0] === 'ready') {
+                    first.push(initialConfig.queue[i][0]);
+                } else {
+                    second.push(initialConfig.queue[i][0]);
+                }
+            }
+            replay(first);
+            replay(second);
         }
 
         function getUTMParams() {
@@ -794,6 +792,25 @@
         this.adaptor.trackForm(elements, name, this.getTraitsToSend());
     }
 
+    SiteHound.prototype.ready = function(f) {
+        if (typeof f === 'function') {
+            this.info('ready()');
+            f();
+        } else {
+            if (window.console && console.error) {
+                console.error("[SiteHound] ready() called with something that isn't a function");
+            }
+        }
+    }
+
+    SiteHound.prototype.load = function(adaptor) {
+        this.info('load() called when already loaded');
+        if (adaptor) {
+            this.info('updating adaptor to: ' + adaptor);
+            this.adaptor = getAdaptor(adaptor);
+        }
+    }
+
     //
     // tracking for debugging our tracking ¯\_(ツ)_/¯
     //
@@ -807,6 +824,9 @@
     }
 
     SiteHound.prototype.trackDebug = function(message, level) {
+        if (!level) {
+            level = 'info';
+        }
         this.adaptor.track('Tracking Debug', {
             message: message,
             level: level,
@@ -824,6 +844,42 @@
         if (window.console && console.error) {
             console.error('[SiteHound] ' + error.name + '; ' + error.message);
         }
+    }
+
+    //
+    // utility methods
+    //
+
+    function titleCase(str) {
+        return typeof str === 'string'
+            ? str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); })
+            : str;
+    }
+
+    function getAdaptor(adaptor) {
+        var adaptorClass, result;
+        if (typeof adaptor === 'object') {
+            result = adaptor;
+        } else {
+            // initialize adaptor for the analytics library we want to use
+            adaptorClass = titleCase(adaptor) || 'Segment';
+            try {
+                var result = eval('new SiteHound_Adaptor_' + adaptorClass);
+            } catch (error) {
+                if (window.console && console.error) {
+                    console.error('[SiteHound] adaptor class SiteHound_Adaptor_' + adaptorClass + " could not be loaded");
+                    console.error('[SiteHound] ' + error.name + '; ' + error.message);
+                }
+                return;
+            }
+        }
+        if (!result.check()) {
+            if (window.console && console.error) {
+                console.error('[SiteHound] failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
+            }
+            return;
+        }
+        return result;
     }
 
     //
@@ -903,15 +959,5 @@
                 analytics.page();
             }
         }
-    }
-
-    //
-    // utility methods
-    //
-
-    function titleCase(str) {
-        return typeof str === 'string'
-            ? str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); })
-            : str;
     }
 }();
