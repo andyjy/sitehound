@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.86 - 4th April 2016
+//  @version       0.87 - 4th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.86";
+    var VERSION = "0.87";
 
     !function() {
         var initialConfig = window.sitehound || {};
@@ -41,8 +41,6 @@
             var initialConfig = window.sitehound || {};
             // initialize SiteHound library, passing in our custom config
             var sitehound = new SiteHound(initialConfig, adaptor);
-            // finally, replace the global sitehound var with our instance for future reference
-            window.sitehound = sitehound;
         });
     }();
 
@@ -730,6 +728,9 @@
             self.adaptor = new SiteHound_Adaptor_Disabled();
             return;
         }
+
+        // replace the global sitehound var with our instance
+        window.sitehound = this;
 
         if (initialConfig.isDone) {
             this.sniff();
