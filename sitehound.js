@@ -202,6 +202,37 @@
             self.adaptor.identify(self.ignoreExistingTraits(params));
         }
 
+        this.detectPage = function(path) {
+            for (var page in self.trackPages) {
+                var pattern = self.trackPages[page];
+                // we support matching based on string, array or regex
+                if (!Array.isArray(pattern)) {
+                    pattern = [pattern];
+                }
+                for (var i = 0; i < pattern.length; ++i) {
+                    var pat = pattern[i];
+                    if (typeof pat.test === 'function') {
+                        if (pat.test(path)) {
+                            // regex matching URL path - TOCHECK
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
+                    } else if (pat[0] === '.') {
+                        // match body css class
+                        if ((path === location.pathname) &&
+                            document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
+                    // string match - we ignore presence of trailing slash on path
+                    } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
+                        self.info('Detected page: ' + page);
+                        return page;
+                    }
+                }
+            }
+        }
+
         this.getTraitsToSend = function(traits) {
             if (typeof traits === 'object') {
                 return mergeObjects(self.thisPageTraits, traits);
@@ -367,37 +398,6 @@
                 trackPage.apply(self, pageParts);
             } else if (self.trackAllPages) {
                 trackPage('Unidentified');
-            }
-        }
-
-        function detectPage(path) {
-            for (var page in self.trackPages) {
-                var pattern = self.trackPages[page];
-                // we support matching based on string, array or regex
-                if (!Array.isArray(pattern)) {
-                    pattern = [pattern];
-                }
-                for (var i = 0; i < pattern.length; ++i) {
-                    var pat = pattern[i];
-                    if (typeof pat.test === 'function') {
-                        if (pat.test(path)) {
-                            // regex matching URL path - TOCHECK
-                            self.info('Detected page: ' + page);
-                            return page;
-                        }
-                    } else if (pat[0] === '.') {
-                        // match body css class
-                        if ((path === location.pathname) &&
-                            document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
-                            self.info('Detected page: ' + page);
-                            return page;
-                        }
-                    // string match - we ignore presence of trailing slash on path
-                    } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
-                        self.info('Detected page: ' + page);
-                        return page;
-                    }
-                }
             }
         }
 
