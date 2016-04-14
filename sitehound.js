@@ -448,6 +448,17 @@
             setCookie('pageViews', pageViews);
             self.info('Pageviews: ' + pageViews);
 
+            var referrerParts = document.referrer.match(/https?:\/\/([^/]+)(\/.*)/),
+                referrerHost = null,
+                referrerPath;
+            if (referrerParts) {
+                referrerHost = referrerParts[1];
+                referrerPath = referrerParts[2];
+            }
+            if (referrerHost == location.host) {
+                self.thisPageTraits['Referrer Type'] = self.detectPage(referrerPath);
+            }
+
             self.isLandingPage = false;
             if (!sessionTimedOut) {
                 // is this a landing page hit? (i.e. first pageview in session)
@@ -479,9 +490,8 @@
                 'UTM Content',
                 'Landing Page',
                 'Landing Page Type',
-                'Initial Referrer', // TOCHECK
-                'Initial Referrer Domain',
-                'Initial Referrer Type'
+                'Initial Referrer',
+                'Initial Referrer Domain'
             ];
             for (var i = 0; i < paramNames.length; i++) {
                 attributionParams[paramNames[i]] = null;
@@ -495,14 +505,8 @@
                 attributionParams = mergeObjects(attributionParams, utmParams);
             }
 
-            // landing page and referrer
-            var referrerParts = document.referrer.match(/https?:\/\/([^/]+)(\/.*)/),
-                referrerHost = null,
-                referrerPath;
-            if (referrerParts) {
-                referrerHost = referrerParts[1];
-                referrerPath = referrerParts[2];
-            }
+            // Landing page
+            //
             // This is the first page on which we've tracked this user, so if the referrer is from the same domain,
             // then the referring page (likely the original landing page?) didn't have our tracking code implemented
             if (referrerHost === location.host) {
@@ -540,24 +544,21 @@
             if (attributionParams['Landing Page']) {
                 attributionParams['Landing Page Type'] = self.page;
             }
-            if (attributionParams['Initial Referrer Domain'] == location.host) {
-                attributionParams['Initial Referrer Type'] = self.detectPage(referrerPath);
-            }
 
             // automatic attribution detection
-            if (!attributionParams['utm_source']) {
+            if (!attributionParams['UTM Source']) {
                 // adwords / doubleclick
                 if (getQueryParam(document.URL, 'gclid') || getQueryParam(document.URL, 'gclsrc')) {
-                    attributionParams['utm_source'] = 'google';
-                    if (!attributionParams['utm_medium']) {
-                        attributionParams['utm_medium'] = 'cpc';
+                    attributionParams['UTM Source'] = 'google';
+                    if (!attributionParams['UTM Medium']) {
+                        attributionParams['UTM Medium'] = 'cpc';
                     }
                 }
                 // Yesware
                 if (attributionParams['Referrer Domain'] == 't.yesware.com') {
-                    attributionParams['utm_source'] = 'Yesware';
-                    if (!attributionParams['utm_medium']) {
-                        attributionParams['utm_medium'] = 'email';
+                    attributionParams['UTM Source'] = 'Yesware';
+                    if (!attributionParams['UTM Medium']) {
+                        attributionParams['UTM Medium'] = 'email';
                     }
                 }
             }
