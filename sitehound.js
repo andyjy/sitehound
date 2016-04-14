@@ -292,6 +292,7 @@
             if (!self.page) {
                 self.page = self.detectPage(location.pathname);
             }
+            self.thisPageTraits['Page Type'] = self.page;
 
             if (self.overrideReferrer !== undefined) {
                 self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
