@@ -34,6 +34,10 @@
         var initialConfig = window.sitehound || {};
 
         var adaptor = getAdaptor(initialConfig.adaptor);
+        if (!adaptor) {
+            // error
+            return;
+        }
 
         // initialize SiteHound when our adaptor's target library is ready
         adaptor.ready(function() {
@@ -225,7 +229,7 @@
                         // string match - match whole path
                         // we ignore presence of trailing slash on path
                         // treat * as a wildcard
-                        if (path.replace(/\/$/, '').match(new RegExp('^' + escapeRegExp(pat.replace(/\/$/, '').replace(/\\\*/g, '.*') + '$'))) {
+                        if (path.replace(/\/$/, '').match(new RegExp('^' + escapeRegExp(pat.replace(/\/$/, '')).replace(/\\\*/g, '.*') + '$'))) {
                             self.info('Detected page: ' + page);
                             return page;
                         }
