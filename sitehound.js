@@ -235,10 +235,11 @@
         }
 
         this.getTraitsToSend = function(traits) {
+            var otherTraits = mergeObjects(self.globalTraits, self.thisPageTraits);
             if (typeof traits === 'object') {
-                return mergeObjects(self.thisPageTraits, traits);
+                return mergeObjects(otherTraits, traits);
             } else {
-                return self.thisPageTraits;
+                return otherTraits;
             }
         }
 
