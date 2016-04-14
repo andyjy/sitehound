@@ -517,6 +517,10 @@
                     // referrer is the current page - treat as landing page
                     self.trackLandingPage = true;
                     attributionParams['Landing page'] = location.pathname;
+                } else if (sessionCount > 1) {
+                    // not the first session - mostly likely page reload triggered with referrer but no session cookie
+                    // due to reopening a previously-closed mobile browser
+                    // - ignore
                 } else {
                     self.trackDebugWarn('Landing page with local referrer - tracking code not on all pages?');
                 }
