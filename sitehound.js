@@ -311,13 +311,13 @@
             // some user-related properties
             var userTraits = self.adaptor.userTraits();
             if (userTraits.createdAt) {
-                self.globalTraits['Days since signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
-                self.info('Days since signup: ' + self.globalTraits['Days since signup']);
+                self.globalTraits['Days Since Signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
+                self.info('Days since signup: ' + self.globalTraits['Days Since Signup']);
             }
-            if (self.userTraits['email domain']) {
-                self.userTraits['email domain'] = self.userTraits['email domain'].match(/[^@]*$/)[0];
-            } else if (userTraits.email || userTraits.Email || self.userTraits['email']) {
-                self.userTraits['email domain'] = (userTraits.email || userTraits.Email || self.userTraits['email']).match(/[^@]*$/)[0];
+            if (self.userTraits['Email Domain']) {
+                self.userTraits['Email Domain'] = self.userTraits['Email Domain'].match(/[^@]*$/)[0];
+            } else if (userTraits.Email || userTraits.email || self.userTraits['Email']) {
+                self.userTraits['Email Domain'] = (userTraits.Email || userTraits.email || self.userTraits['Email']).match(/[^@]*$/)[0];
             }
 
             // Fullstory.com session URL
@@ -344,7 +344,7 @@
                 for (var key in self.userTraits) {
                     // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
                     // get the traits from the adaptor?
-                    var newKey = (['name', 'email'].indexOf(key.toLowerCase()) !== -1) ? key.toLowerCase() : 'User ' + key;
+                    var newKey = (['name', 'email'].indexOf(key.toLowerCase()) !== -1) ? key.toLowerCase() : 'User ' + titleCase(key);
                     userTraits[newKey] = self.userTraits[key];
                 }
                 var traits = mergeObjects(self.globalTraits, userTraits);
@@ -415,8 +415,8 @@
             var firstSeen = getCookie('firstSeen') || new Date().toISOString();
             setCookie('firstSeen', firstSeen, 366);
             var daysSinceFirst = Math.floor((new Date() - new Date(firstSeen))/1000/60/60/24);
-            self.globalTraits['First seen'] = firstSeen;
-            self.globalTraits['Days since first seen'] = daysSinceFirst;
+            self.globalTraits['First Seen'] = firstSeen;
+            self.globalTraits['Days Since First Seen'] = daysSinceFirst;
             self.info('Visitor first seen: ' + firstSeen);
             self.info('Days since first seen: ' + daysSinceFirst);
 
@@ -425,8 +425,8 @@
                 sessionUpdated = getCookie('sessionUpdated') || new Date().toISOString();
             var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60),
                 sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
-            self.globalTraits['Session started'] = sessionStarted;
-            self.globalTraits['Minutes since session start'] = sessionDuration;
+            self.globalTraits['Session Started'] = sessionStarted;
+            self.globalTraits['Minutes Since Session Start'] = sessionDuration;
             self.info('Session started: ' + sessionStarted);
             self.info('Session duration: ' + sessionDuration);
             self.info('Minutes since last event: ' + sessionSilent);
@@ -440,7 +440,7 @@
 
             // tracked pageviews this session
             var pageViews = (sessionTimedOut ? 0 : parseInt(getCookie('pageViews') || 0)) + 1;
-            self.thisPageTraits['Pageviews this session'] = pageViews;
+            self.thisPageTraits['Pageviews This Session'] = pageViews;
             setCookie('pageViews', pageViews);
             self.info('Pageviews: ' + pageViews);
 
@@ -456,7 +456,7 @@
 
             // session count for this visitor
             var sessionCount = parseInt(getCookie('sessionCount') || 0) + 1;
-            self.globalTraits['Session count'] = sessionCount;
+            self.globalTraits['Session Count'] = sessionCount;
             setCookie('sessionCount', sessionCount, 366);
             self.info('Session count: ' + sessionCount);
 
@@ -473,11 +473,11 @@
                 'UTM Campaign',
                 'UTM Term',
                 'UTM Content',
-                'Landing page',
-                'Landing page type',
-                'Referrer', // TOCHECK
-                'Referrer domain',
-                'Referrer type'
+                'Landing Page',
+                'Landing Page Type',
+                'Initial Referrer', // TOCHECK
+                'Initial Referrer Domain',
+                'Initial Referrer Type'
             ];
             for (var i = 0; i < paramNames.length; i++) {
                 attributionParams[paramNames[i]] = null;
@@ -510,14 +510,14 @@
                         path: referrerPath,
                         url: document.referrer,
                         '$current_url': document.referrer,
-                        'Tracked from URL': location.href,
+                        'Tracked From URL': location.href,
                         referrer: ''
                     };
-                    attributionParams['Landing page'] = referrerPath;
+                    attributionParams['Landing Page'] = referrerPath;
                 } else if (document.referrer === location.href) {
                     // referrer is the current page - treat as landing page
                     self.trackLandingPage = true;
-                    attributionParams['Landing page'] = location.pathname;
+                    attributionParams['Landing Page'] = location.pathname;
                 } else if (sessionCount > 1) {
                     // not the first session - mostly likely page reload triggered with referrer but no session cookie
                     // due to reopening a previously-closed mobile browser
@@ -527,17 +527,17 @@
                 }
             } else {
                 self.trackLandingPage = true;
-                attributionParams['Landing page'] = location.pathname;
-                attributionParams['Referrer'] = document.referrer ? document.referrer : null;
-                attributionParams['Referrer domain'] = referrerHost;
+                attributionParams['Landing Page'] = location.pathname;
+                attributionParams['Initial Referrer'] = document.referrer ? document.referrer : null;
+                attributionParams['Initial Referrer Domain'] = referrerHost;
             }
 
             // add some additional metadata
-            if (attributionParams['Landing page']) {
-                attributionParams['Landing page type'] = self.page;
+            if (attributionParams['Landing Page']) {
+                attributionParams['Landing Page Type'] = self.page;
             }
-            if (attributionParams['Referrer domain'] == location.host) {
-                attributionParams['Referrer type'] = self.detectPage(referrerPath);
+            if (attributionParams['Initial Referrer Domain'] == location.host) {
+                attributionParams['Initial Referrer Type'] = self.detectPage(referrerPath);
             }
 
             // automatic attribution detection
@@ -550,7 +550,7 @@
                     }
                 }
                 // Yesware
-                if (attributionParams['Referrer domain'] == 't.yesware.com') {
+                if (attributionParams['Referrer Domain'] == 't.yesware.com') {
                     attributionParams['utm_source'] = 'Yesware';
                     if (!attributionParams['utm_medium']) {
                         attributionParams['utm_medium'] = 'email';
