@@ -217,14 +217,18 @@
                     } else if (pat[0] === '.') {
                         // match body css class
                         if ((path === location.pathname) &&
-                            document.body.className.match(new RegExp('(?:^|\\s)' + RegExp.escape(pat.slice(1)) + '(?!\\S)'))) {
+                            document.body.className.match(new RegExp('(?:^|\\s)' + escapeRegExp(pat.slice(1)) + '(?!\\S)'))) {
                             self.info('Detected page: ' + page);
                             return page;
                         }
-                    // string match - we ignore presence of trailing slash on path
-                    } else if (pat.replace(/\/$/, '') === path.replace(/\/$/, '')) {
-                        self.info('Detected page: ' + page);
-                        return page;
+                    } else {
+                        // string match - match whole path
+                        // we ignore presence of trailing slash on path
+                        // treat * as a wildcard
+                        if (path.replace(/\/$/, '').match(new RegExp('^' + escapeRegExp(pat.replace(/\/$/, '').replace(/\\\*/g, '.*') + '$'))) {
+                            self.info('Detected page: ' + page);
+                            return page;
+                        }
                     }
                 }
             }
@@ -336,6 +340,8 @@
                 self.info('Received userId: ' + self.userId);
                 var userTraits = {};
                 for (var key in self.userTraits) {
+                    // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
+                    // get the traits from the adaptor?
                     var newKey = (['name', 'email'].indexOf(key.toLowerCase()) !== -1) ? key.toLowerCase() : 'User ' + key;
                     userTraits[newKey] = self.userTraits[key];
                 }
@@ -671,6 +677,10 @@
             for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
             for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
             return obj3;
+        }
+
+        function escapeRegExp(str) {
+            return str.replace(/([\/*.?[\]()])/g, '\\$1');
         }
 
         function ignoreExistingTraits(params) {
