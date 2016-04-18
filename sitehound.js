@@ -129,8 +129,8 @@
             try {
                 self.info('Sniffing..');
                 // check we want to track this host
-                if (ignoreHost(location.host)) {
-                    self.info('Ignoring host: ' + location.host);
+                if (ignoreHost(location.hostname)) {
+                    self.info('Ignoring host: ' + location.hostname);
                     self.adaptor = new SiteHound_Adaptor_Disabled();
                     return;
                 }
