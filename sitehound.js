@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.93 - 18th April 2016
+//  @version       0.94 - 22nd April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.93";
+    var VERSION = "0.94";
 
     !function() {
         var initialConfig = window.sitehound || {};
@@ -64,7 +64,7 @@
             detectHashChange: false,
 
             // disable tracking on particular hosts
-            domainsIgnore: ['localhost'],
+            domainsIgnore: ['localhost', 'gtm-msr.appspot.com'],
             domainsIgnoreIPAddress: true,
             domainsIgnoreSubdomains: ['staging', 'test'],
 
@@ -491,7 +491,7 @@
                 'Landing Page',
                 'Landing Page Type',
                 'Initial Referrer',
-                'Initial Referrer Domain'
+                'Initial Referring Domain'
             ];
             for (var i = 0; i < paramNames.length; i++) {
                 attributionParams[paramNames[i]] = null;
@@ -537,7 +537,7 @@
                 self.trackLandingPage = true;
                 attributionParams['Landing Page'] = location.pathname;
                 attributionParams['Initial Referrer'] = document.referrer ? document.referrer : null;
-                attributionParams['Initial Referrer Domain'] = referrerHost;
+                attributionParams['Initial Referring Domain'] = referrerHost;
             }
 
             // add some additional metadata
@@ -555,7 +555,7 @@
                     }
                 }
                 // Yesware
-                if (attributionParams['Referrer Domain'] == 't.yesware.com') {
+                if (attributionParams['Referring Domain'] == 't.yesware.com') {
                     attributionParams['UTM Source'] = 'Yesware';
                     if (!attributionParams['UTM Medium']) {
                         attributionParams['UTM Medium'] = 'email';
@@ -691,7 +691,7 @@
         }
 
         function escapeRegExp(str) {
-            return str.replace(/([\/*.?[\]()])/g, '\\$1');
+            return str.replace(/([\/*.?[\]()\-])/g, '\\$1');
         }
 
         function ignoreExistingTraits(params) {
