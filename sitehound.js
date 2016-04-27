@@ -30,7 +30,11 @@
 !function() {
     var VERSION = "0.94";
 
-    !function() {
+    // where we store registered adaptors for different platforms
+    var adaptors = {};
+
+    // kickoff
+    function init() {
         var initialConfig = window.sitehound || {};
 
         var adaptor = getAdaptor(initialConfig.adaptor);
@@ -46,7 +50,7 @@
             // initialize SiteHound library, passing in our custom config
             var sitehound = new SiteHound(initialConfig, adaptor);
         });
-    }();
+    }
 
     function SiteHound(initialConfig, adaptor) {
         var config = {
@@ -927,18 +931,22 @@
             : str;
     }
 
+    function registerAdaptor(klass, adaptor) {
+        adaptors[klass] = adaptor;
+    }
+
     function getAdaptor(adaptor) {
         var adaptorClass, result;
         if (typeof adaptor === 'object') {
             result = adaptor;
         } else {
             // initialize adaptor for the analytics library we want to use
-            adaptorClass = titleCase(adaptor) || 'Segment';
+            adaptorClass = (adaptor.toLowerCase()) || 'segment';
             try {
-                var result = eval('new SiteHound_Adaptor_' + adaptorClass);
+                var result = new adaptors[adaptorClass];
             } catch (error) {
                 if (window.console && console.error) {
-                    console.error('[SiteHound] adaptor class SiteHound_Adaptor_' + adaptorClass + " could not be loaded");
+                    console.error('[SiteHound] adaptor ' + adaptorClass + " could not be loaded");
                     console.error('[SiteHound] ' + error.name + '; ' + error.message);
                 }
                 return;
@@ -957,14 +965,15 @@
     // Adaptors
     //
 
-    function SiteHound_Adaptor_Disabled() {
+    registerAdaptor('disabled', function() {
         // tracking disabled
         this.check = this.ready = this.identify = this.track = this.trackLink = this.trackForm
             = this.page = this.alias = this.userId = this.userTraits
             = function() {}
-    }
+    });
 
-    function SiteHound_Adaptor_Segment() {
+
+    registerAdaptor('segment', function() {
         window.analytics = window.analytics || [];
         var self = this;
 
@@ -1030,5 +1039,8 @@
                 analytics.page();
             }
         }
-    }
+    });
+
+    // let's go
+    init();
 }();
