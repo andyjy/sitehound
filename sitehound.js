@@ -97,13 +97,15 @@
             // session timeout before tracking the start of a new session (in minutes)
             sessionTimeout: 30,
             // provide an overridden referrer to replce in when tracking on this page
-            overrideReferrer: undefined
+            overrideReferrer: undefined,
+
+            // queued-up methods to execute
+            queue: []
         };
 
         var self = this;
 
         this.sniffed = false;
-        this.queue = [];
 
         this.adaptor = adaptor;
         if ((typeof adaptor !== 'object') || !adaptor.check()) {
