@@ -194,7 +194,10 @@
                 // already sniffed - no need to defer
                 return false;
             } // else - defer until we've sniffed
-            self.queue.push(args.unshift(method));
+            // convert from Arguments type to real array
+            args = Array.prototype.slice.call(args);
+            args.unshift(method);
+            self.queue.push(args);
             return true;
         }
 

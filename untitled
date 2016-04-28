@@ -1,0 +1,253 @@
+//
+// Segment.com event and user tracking
+// Used to implement Mixpanel, Fullstory etc
+//
+(function() {
+  var alreadySent = {};
+
+  try {
+    // init config objects
+    sitehound.thisPageTraits = sitehound.thisPageTraits || {};
+    sitehound.userTraits = sitehound.userTraits || {};
+
+    // extract params from Google Tag Manager data layer
+    var dataLayerParams = getDataLayerParams();
+    if (dataLayerParams.loggedInState !== undefined) {
+      sitehound.thisPageTraits['Logged in'] = !!dataLayerParams.loggedInState;
+    }
+    for (var key in dataLayerParams) {
+      sitehound.thisPageTraits['dataLayer ' + key] = dataLayerParams[key];
+    }
+
+    // do we have a user?
+    if (window.qc && window.qc.template && window.qc.template.userId) {
+      var t = window.qc.template,
+          userTraits = sitehound.userTraits;
+
+      // we have a user
+      sitehound.userId = t.userId;
+
+      if (t.userEmail) {
+        // 'Email Domain' user trait is automagically sanitized to just domain name
+        userTraits['Email Domain'] = t.userEmail;
+      }
+      if (t.userType !== undefined) {
+        userTraits['User type'] = titleCase(t.userType);
+      }
+      if (t.brandCustomer !== undefined) {
+        userTraits['User is brand customer'] = t.brandCustomer;
+      }
+      if (t.isAdmin !== undefined) {
+        userTraits['User is admin'] = t.isAdmin;
+      }
+      if (t.loggedInState !== undefined && !t.loggedInState) {
+        sitehound.trackDebugWarn('loggedInState not true: ' + t.loggedInState);
+      }
+      var publisherCode = document.getElementById('publisher-code');
+      if (publisherCode && publisherCode.value) {
+        userTraits['User p-code'] = publisherCode.value;
+      }
+    }
+
+    sitehound.trackLink($('#Nav_Logo'), 'Clicked Main Nav > Logo');
+    sitehound.trackLink($('#Nav_Menu_Advertise'), 'Clicked Main Nav > Measure');
+    sitehound.trackLink($('#Nav_Menu_Measure'), 'Clicked Main Nav > Advertise');
+
+    sitehound.trackLink($('#Nav_Login'), 'Clicked Main Nav > Login');
+    sitehound.trackLink($('#Nav_ExploreSearch'), 'Clicked Main Nav > Explore');
+    sitehound.trackLink($('#Nav_Menu'), 'Clicked Main Nav > Menu');
+    sitehound.trackLink($('#Nav_Menu_SignUp'), 'Clicked Main Nav > Menu > Sign Up');
+    sitehound.trackLink($('#signupAction'), 'Clicked Main Nav > Sign Up');
+
+    sitehound.trackLink($('#userAction'), 'Clicked Main Nav > User Dropdown');
+    sitehound.trackLink($('#userDropDownLogOut'), 'Clicked Logout');
+
+    sitehound.trackLink($('a[href="#tagGenerator"][class!="close"][id!="pendingSiteScanMessage"]'), 'Clicked Add Website');
+    sitehound.trackLink($('a[href="#tagGenerator"][id="pendingSiteScanMessage"]'), 'Clicked Implement Tag');
+    sitehound.trackLink($('a[href="#appTagGenerator"][class!="close"]'), 'Clicked Add App');
+
+    sitehound.trackLink($('a#submit-site,a:contains("Submit Site")'), 'Clicked Submit Site');
+    sitehound.trackLink($('a:contains("Add App & Download SDK")'), 'Clicked Submit App & Download SDK');
+
+    sitehound.trackPages = {
+      'Search': '/search',
+      'Signup': '/user/signup',
+      'Site Config': '/user/config',
+      'Account Settings': '/user/account',
+      'Contact Us': '/contact-us/',
+      'Advertise|Contact': '/advertise/contact',
+      'Advertise': '/advertise/*',
+      '/measure/': '/measure/',
+      'Untracked Measure page': '/measure/*'
+    };
+
+    sitehound.ready(function() {
+      switch(location.pathname) {
+        //
+        case '/':
+        case '/home':
+          if (document.body.id == 'dashboard') {
+            trackDebugInfo('Measure Dashboard served from root URL /');
+            trackDashboard();
+          } else {
+            sitehound.page = 'Home';
+            if (($('#Nav_User') || $('#Nav_Logout')).length == 0) {
+              // identify if we've logged out
+              sitehound.detectLogout = true;
+            }
+          }
+          break;
+        //
+        case '/measure/home':
+          trackDashboard();
+          break;
+        //
+        case '/user/signup':
+          var successTitle = $('.qc-white-box__title')[0];
+          if (successTitle && /Thanks for signing up/.test(successTitle.textContent)) {
+            sitehound.track('Signed Up');
+          }
+      }
+
+      if ((document.body.id == 'dashboard') && (['/', '/measure/home'].indexOf(location.pathname) == -1)) {
+        sitehound.trackDebugWarn('Measure Dashboard served from unexpected URL');
+      }
+
+      if (/(^| )home($| )/.test(document.body.className) && (['/', '/home'].indexOf(location.pathname) == -1)) {
+        sitehound.trackDebugInfo('body[class=home] but URL is not / or /home');
+      }
+
+      if (!sitehound.detectPage()) {
+        var is_app = location.pathname.lastIndexOf('/app/', 0) === 0;
+        var is_network = location.pathname.lastIndexOf('/p-', 0) === 0;
+        var is_segment = location.pathname.lastIndexOf('/wpath', 0) === 0;
+        var type = is_app ? 'App' : (is_network ? 'Network' : (is_segment ? 'Segment' : 'Site'));
+        switch (document.body.id) {
+          //
+          case 'profile':
+            sitehound.page = 'Profile';
+            sitehound.pageTraits = {
+                'New profile': false,
+                'Type': type
+            };
+            break;
+          //
+          case 'new-profile':
+            var json = $('script[key=profileStats]')[0];
+            var profileStats = {};
+            try {
+              if (json !== undefined) {
+                profileStats = JSON.parse(json.textContent);
+              }
+            } catch (e) {}
+            var traits = {
+              'New profile': true,
+              'Type': profileStats.type,
+              'Type (from URL)': type,
+              'Display name': profileStats.profileDisplayName,
+              'Quantified': profileStats.quantified,
+              'Estimated': profileStats.estimated
+            }
+            // Does this profile belong to the current user?
+            json = $('script[key=sites]')[0];
+            var sites = {};
+            try {
+              if (json !== undefined) {
+                sites = JSON.parse(json.textContent);
+                if (sites.see_all_link) {
+                  var pcode = sites.see_all_link.match(/\/([^\/]+)\//)[1];
+                  traits['Profile p-code'] = pcode;
+                  var user = analytics.user();
+                  var userTraits = user.traits();
+                  traits["Profile belongs to user"] = (pcode == userTraits['User p-code']);
+                }
+              }
+            } catch (e) {}
+            // TODO: Track views with/without data
+            // TODO: Track type of profile
+            sitehound.page = 'Profile';
+            sitehound.pageTraits = traits;
+            break;
+        }
+      }
+    });
+  } catch(error) {
+    sitehound.trackError(error);
+  }
+
+  var trackDashboard = function() {
+    var traits = {
+      'Has data': $('#traffic-graph-wrapper').length > 0
+    };
+
+    if ($('#sites-awaiting-scanning').css('display') === 'block') {
+      traits['Scanning Site'] = true;
+      sitehound.identifyOnce({
+        'First Scanning Site': new Date().toISOString()
+      });
+    }
+
+    sitehound.page = 'Measure|Dashboard';
+    sitehound.pageTraits = traits;
+
+    var successMessages = $('.success');
+    for (var i = 0; i < successMessages.length; i++) {
+      var message = successMessages[i].textContent;
+      if (/Quantcast has scanned your site and it is now Quantified/.test(message)) {
+        sitehound.trackOnce('Quantified Site');
+      }
+      // TODO: does this above banner ever disappear?
+      if (/You have successfully added your mobile app/.test(message) && !alreadySent.submittedApp) {
+        alreadySent.submittedApp = true;
+        sitehound.trackAndCount('Added App');
+      }
+    }
+
+    if (/[\?&]c=1/.test(document.location.search)) {
+      sitehound.track('Verified Email');
+    }
+    
+    var user = analytics.user();
+    var userTraits = user.traits();
+    if (($('#publisherModule-item-list0').length > 0) && !(userTraits['Added App Count'] > 0) && (userTraits['Submitted Site Count'] > 0)) {
+      sitehound.trackOnce('Tag detected');
+    }
+    if ($('#traffic-graph-wrapper').length > 0) {
+      sitehound.trackOnce('Dashboard with data');
+    }
+
+    $('#dashboardLeftColumn').bind('DOMSubtreeModified', function(e) {
+      var successMessages = $('.success');
+      for (var i = 0; i < successMessages.length; i++) {
+        var message = successMessages[i].textContent;
+        if (/You have successfully submitted your site/.test(message) && !alreadySent.submittedSite) {
+          alreadySent.submittedSite = true;
+          sitehound.trackAndCount('Submitted Site');
+        }
+        if (/You have successfully added your mobile app/.test(message) && !alreadySent.submittedApp) {
+          alreadySent.submittedApp = true;
+          sitehound.trackAndCount('Added App');
+        }
+      }
+    });
+  }
+
+  function getDataLayerParams() {
+    var params = {};
+    for (var key in dataLayer) {
+      if(!('event' in dataLayer[key])) {
+        for (var key2 in dataLayer[key]) {
+          params[key2] = dataLayer[key][key2];
+        }
+      }
+    }
+    return params;
+  }
+
+  function titleCase(str) {
+    return typeof str === 'string'
+      ? str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); })
+      : str;
+  }
+
+})();
