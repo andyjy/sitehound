@@ -201,12 +201,14 @@
             args = Array.prototype.slice.call(args);
             args.unshift(method);
             self.queue.push(args);
+            self.info('(Deferring ' + method + '() until sniff)');
             return true;
         }
 
         // like analytics.identify({..}), but only set traits if they're not already set
         this.identifyOnce = function(params) {
             if (self.deferUntilSniff('identifyOnce', arguments)) {return;}
+            self.info('identifyOnce', params);
             self.adaptor.identify(self.ignoreExistingTraits(params));
         }
 
@@ -257,13 +259,29 @@
             }
         }
 
-        this.info = function(message) {
-            if (self.logToConsole && window.console && console.log) {
+        this.info = function(message, object) {
+            if (!self.logToConsole || !window.console || !console.log) {
+                return;
+            }
+            try {
+                var prefix = '[SiteHound] ';
                 if (typeof message === 'object') {
-                    console.log(message);
+                    if (JSON && JSON.stringify) {
+                        message = prefix + JSON.stringify(message);
+                    }
                 } else {
-                    console.log('[SiteHound] ' + message);
+                    message = prefix + message;
                 }
+                if (object && JSON && JSON.stringify) {
+                    message = message + '(' + JSON.stringify(object).slice(1).slice(0,-1) + ')';
+                    object = null;
+                }
+                console.log(message);
+                if (object) {
+                    console.log(object);
+                }
+            } catch (error) {
+                self.trackError(error);
             }
         }
 
@@ -275,6 +293,7 @@
                 // clear cookie - track again
                 setCookie('dnt', '', -100);
             }
+            self.info('doNotTrack', dnt ? 'true' : 'false')
         }
 
         //
@@ -607,6 +626,7 @@
         }
 
         function trackPage(one, two, three) {
+            self.info('Viewed Page: ', [one, two, three]);
             if (typeof three === 'object') {
                 self.adaptor.page(one, two, self.getTraitsToSend(three));
             } else if (typeof two === 'object') {
@@ -796,8 +816,8 @@
         this.info('Cookie domain: ' + this.cookieDomain);
 
         if (getCookie('dnt')) {
-            self.info('do-not-track cookie present');
-            self.adaptor = 'disabled';
+            this.info('do-not-track cookie present');
+            this.adaptor = 'disabled';
             return;
         }
 
@@ -806,7 +826,7 @@
 
         if (initialConfig.isDone) {
             this.sniff();
-        }        
+        }
     }
 
     //
@@ -815,7 +835,7 @@
 
     SiteHound.prototype.identify = function(a, b) {
         if (this.deferUntilSniff('identify', arguments)) {return;}
-
+        this.info('identify', [a, b]);
         this.adaptor.identify(a, b);
     }
 
@@ -823,18 +843,21 @@
         if (this.deferUntilSniff('track', arguments)) {return;}
 
         if (typeof traits == 'object') {
-            this.adaptor.track(event, this.getTraitsToSend(traits));
+            traits = this.getTraitsToSend(traits);
         } else {
-            this.adaptor.track(event, this.getTraitsToSend());
+            traits = this.getTraitsToSend();
         }
+        this.info('track', [event, traits]);
+        this.adaptor.track(event, traits);
     }
 
     // similar to identifyOnce, but also track event
     SiteHound.prototype.trackOnce = function(event, params) {
         if (this.deferUntilSniff('trackOnce', arguments)) {return;}
 
-        var traits = this.adaptor.userTraits();
+        this.info('trackOnce', [event, params]);
 
+        var traits = this.adaptor.userTraits();
         if (traits['First ' + event] === undefined) {
             var userParams = {};
             userParams['First ' + event] = new Date().toISOString();
@@ -847,6 +870,7 @@
     SiteHound.prototype.trackAndCount = function(event, params) {
         if (this.deferUntilSniff('trackAndCount', arguments)) {return;}
 
+        this.info('trackAndCount', [event, params]);
         var traits = this.adaptor.userTraits();
 
         var count = 1;
@@ -868,11 +892,21 @@
     SiteHound.prototype.trackLink = function(elements, name) {
         if (this.deferUntilSniff('trackLink', arguments)) {return;}
 
+        var elementInfo = {};
+        if (elements && elements.selector) { elementInfo.selector = elements.selector; }
+        if (elements && elements.length) { elementInfo.length = elements.length; }
+        this.info('trackLink', [elementInfo, name]);
+
         this.adaptor.trackLink(elements, name, this.getTraitsToSend());
     }
 
     SiteHound.prototype.trackForm = function(elements, name) {
         if (this.deferUntilSniff('trackForm', arguments)) {return;}
+
+        var elementInfo = {};
+        if (elements && elements.selector) { elementInfo.selector = elements.selector; }
+        if (elements && elements.length) { elementInfo.length = elements.length; }
+        this.info('trackForm', [elementInfo, name]);
 
         this.adaptor.trackForm(elements, name, this.getTraitsToSend());
     }
@@ -889,7 +923,9 @@
     }
 
     SiteHound.prototype.getUserTraits = function() {
-        return mergeObjects(this.adaptor.userTraits(), this.userTraits);
+        result = mergeObjects(this.adaptor.userTraits(), this.userTraits);
+        this.info('getUserTraits() returned ', result);
+        return result;
     }
 
     SiteHound.prototype.load = function(adaptor) {
