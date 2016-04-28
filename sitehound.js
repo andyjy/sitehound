@@ -1,18 +1,19 @@
 //
-//  SiteHound - Easy & powerful user, session and event tracking
+//  SiteHound - Easy & powerful website analytics tracking
 //
 //  Supports tracking events to:
 //  - Segment.com's analytics.js
 //  - mixpanel.js
-// 
-//  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
+//
+//  Docs: http://www.sitehound.co
+//  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
 //  @version       0.95 - 28th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
-//
+//  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  This program is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
