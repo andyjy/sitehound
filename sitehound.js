@@ -353,11 +353,26 @@
             if (self.userId) {
                 // we have a logged-in user
                 self.info('Received userId: ' + self.userId);
-                var userTraits = {};
+                var userTraits = {},
+                    specialKeys = [
+                        'name',
+                        'email',
+                        'createdAt'
+                    ];
                 for (var key in self.userTraits) {
                     // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
                     // get the traits from the adaptor?
-                    var newKey = (['name', 'email'].indexOf(key.toLowerCase()) !== -1) ? key.toLowerCase() : 'User ' + titleCase(key);
+                    var keyLower = key.toLowerCase(),
+                        newKey = '';
+                    for (var i = 0; i < specialKeys.length; i++) {
+                        if (keyLower === specialKeys[i].toLowerCase()) {
+                            newKey = specialKeys[i];
+                            break;
+                        }
+                    }
+                    if (!newKey) {
+                        newKey = 'User ' + titleCase(key);
+                    }
                     userTraits[newKey] = self.userTraits[key];
                 }
                 var traits = mergeObjects(self.globalTraits, userTraits);
@@ -642,32 +657,6 @@
             }
         }
 
-        function getUTMParams() {
-            var utm_params = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' '),
-                kw = '',
-                params = {};
-
-            for (var index = 0; index < utm_params.length; ++index) {
-                kw = getQueryParam(document.URL, utm_params[index]);
-                if (kw.length) {
-                    params['UTM ' + titleCase(utm_params[index].slice(4))] = kw;
-                }
-            }
-            return params;
-        }
-
-        function getQueryParam(url, param) {
-            param = param.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
-            var regexS = "[\\?&]" + param + "=([^&#]*)";
-            var regex = new RegExp(regexS);
-            var results = regex.exec(url);
-            if (results === null || (results && typeof(results[1]) !== 'string' && results[1].length)) {
-                return '';
-            } else {
-                return decodeURIComponent(results[1]).replace(/\+/g, ' ');
-            }
-        }
-
         function setCookie(name, value, expiry_days, domain) {
             var expires = '';
             if (expiry_days != 0) {
@@ -692,15 +681,30 @@
             return '';
         }
 
-        function mergeObjects(obj1, obj2) {
-            var obj3 = {};
-            for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
-            for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
-            return obj3;
+        function getUTMParams() {
+            var utm_params = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' '),
+                kw = '',
+                params = {};
+
+            for (var index = 0; index < utm_params.length; ++index) {
+                kw = getQueryParam(document.URL, utm_params[index]);
+                if (kw.length) {
+                    params['UTM ' + titleCase(utm_params[index].slice(4))] = kw;
+                }
+            }
+            return params;
         }
 
-        function escapeRegExp(str) {
-            return str.replace(/([\/*.?[\]()\-])/g, '\\$1');
+        function getQueryParam(url, param) {
+            param = param.replace(/[\[]/, "\\\[").replace(/[\]]/, "\\\]");
+            var regexS = "[\\?&]" + param + "=([^&#]*)";
+            var regex = new RegExp(regexS);
+            var results = regex.exec(url);
+            if (results === null || (results && typeof(results[1]) !== 'string' && results[1].length)) {
+                return '';
+            } else {
+                return decodeURIComponent(results[1]).replace(/\+/g, ' ');
+            }
         }
 
         function ignoreExistingTraits(params) {
@@ -883,6 +887,10 @@
         }
     }
 
+    SiteHound.prototype.getUserTraits = function() {
+        return mergeObjects(this.adaptor.userTraits(), this.userTraits);
+    }
+
     SiteHound.prototype.load = function(adaptor) {
         this.info('load() called when already loaded');
         if (adaptor) {
@@ -934,6 +942,17 @@
         return typeof str === 'string'
             ? str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); })
             : str;
+    }
+
+    function mergeObjects(obj1, obj2) {
+        var obj3 = {};
+        for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
+        for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
+        return obj3;
+    }
+
+    function escapeRegExp(str) {
+        return str.replace(/([\/*.?[\]()\-\|])/g, '\\$1');
     }
 
     function registerAdaptor(klass, adaptor) {
