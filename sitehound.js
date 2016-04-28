@@ -965,7 +965,7 @@
             result = adaptor;
         } else {
             // initialize adaptor for the analytics library we want to use
-            adaptorClass = (adaptor.toLowerCase()) || 'segment';
+            adaptorClass = ((adaptor || 'segment').toLowerCase()) || 'segment';
             try {
                 var result = new adaptors[adaptorClass];
             } catch (error) {
