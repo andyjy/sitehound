@@ -8,7 +8,7 @@
 //  ~~ 500 Startups Distro Team // #500STRONG // 500.co ~~
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.94 - 22nd April 2016
+//  @version       0.95 - 28th April 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -28,7 +28,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.94";
+    var VERSION = "0.95";
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
