@@ -137,12 +137,12 @@
                 // check we want to track this host
                 if (ignoreHost(location.hostname)) {
                     self.info('Ignoring host: ' + location.hostname);
-                    self.adaptor = new SiteHound_Adaptor_Disabled();
+                    self.adaptor = 'disabled';
                     return;
                 }
                 if (getCookie('dnt')) {
                     self.info('do-not-track cookie present');
-                    self.adaptor = new SiteHound_Adaptor_Disabled();
+                    self.adaptor = 'disabled';
                     return;
                 }
 
@@ -796,7 +796,7 @@
 
         if (getCookie('dnt')) {
             self.info('do-not-track cookie present');
-            self.adaptor = new SiteHound_Adaptor_Disabled();
+            self.adaptor = 'disabled';
             return;
         }
 
