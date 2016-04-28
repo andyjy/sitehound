@@ -291,7 +291,7 @@
                 return true;
             }
             for (var i = 0; i < self.domainsIgnoreSubdomains.length; i++) {
-                if (host.indexOf(self.domainsIgnoreSubdomains[0] + '.') == 0) {
+                if (host.indexOf(self.domainsIgnoreSubdomains[i] + '.') == 0) {
                     // host matches a subdomain pattern we wish to ignore
                     return true;
                 }
