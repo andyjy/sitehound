@@ -209,7 +209,7 @@
         this.identifyOnce = function(params) {
             if (self.deferUntilSniff('identifyOnce', arguments)) {return;}
             self.info('identifyOnce', params);
-            self.adaptor.identify(self.ignoreExistingTraits(params));
+            self.adaptor.identify(ignoreExistingTraits(params));
         }
 
         this.detectPage = function(path) {
