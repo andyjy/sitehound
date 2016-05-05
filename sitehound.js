@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.961 - 5th May 2016
+//  @version       0.962 - 5th May 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.961";
+    var VERSION = "0.962";
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
@@ -450,6 +450,8 @@
             // track landing page event?
             if (self.trackLandingPage) {
                 trackPage('Landing', self.landingPageTraits);
+                // only do this once
+                self.trackLandingPage = false;
             }
 
             // track page view event?
