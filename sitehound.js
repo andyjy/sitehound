@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.962 - 5th May 2016
+//  @version       0.963 - 5th May 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.962";
+    var VERSION = "0.963";
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
@@ -174,12 +174,8 @@
                                 (location.href !== currentURL) :
                                 (location.href.replace(/#.*$/, '') !== currentURL.replace(/#.*$/, ''))
                             ) {
-                                self.overrideReferrer = currentURL || document.referrer;
+                                urlChanged(currentURL);
                                 currentURL = location.href;
-                                self.info('Detected URL change: ' + currentURL);
-                                self.page = undefined;
-                                urlChanged();
-                                self.sniff();
                             }
                         },
                         1000
@@ -689,13 +685,17 @@
             }
         }
 
-        function urlChanged() {
+        function urlChanged(previousURL) {
+            self.info('Detected URL change: ' + location.href);
+            // reset config for the new URL
+            self.overrideReferrer = previousURL || document.referrer;
+            self.page = undefined;
             // fire listeners
-            console.log('urlChangeQueue');
-            console.log(urlChangeQueue);
             for (var i = 0; i < urlChangeQueue.length; i++) {
                 urlChangeQueue[i]();
             }
+            // trigger sniffing for new virtual pageview
+            self.sniff();
         }
 
         function setCookie(name, value, expiry_days, domain) {
