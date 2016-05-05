@@ -126,7 +126,9 @@
         this.thisPageTraits['SiteHound library version'] = this.VERSION = VERSION;
 
         // for auto-detection of page URL change (single-page sites e.g. angularjs)
-        var intervalId, currentURL;
+        var intervalId,
+            currentURL,
+            urlChangeQueue = [];
 
         //
         // privileged methods
@@ -154,11 +156,6 @@
                 // core tracking for on page load
                 doSniff();
 
-                // callback for adaptor
-                if (typeof self.adaptor.afterSniff === 'function') {
-                    self.adaptor.afterSniff();
-                }
-
                 // beyond this point should only be executed once per pageview
                 if (!firstSniff) {
                     return;
@@ -181,6 +178,7 @@
                                 currentURL = location.href;
                                 self.info('Detected URL change: ' + currentURL);
                                 self.page = undefined;
+                                urlChanged();
                                 self.sniff();
                             }
                         },
@@ -294,6 +292,17 @@
                 setCookie('dnt', '', -100);
             }
             self.info('doNotTrack', dnt ? 'true' : 'false')
+        }
+
+        this.onURLChange = this.onUrlChange = function(f) {
+            if (typeof f === 'function') {
+                this.info('onURLChange()');
+                urlChangeQueue.push(f);
+            } else {
+                if (window.console && console.error) {
+                    console.error("[SiteHound] onURLChange() called with something that isn't a function");
+                }
+            }
         }
 
         //
@@ -678,6 +687,15 @@
             }
         }
 
+        function urlChanged() {
+            // fire listeners
+            console.log('urlChangeQueue');
+            console.log(urlChangeQueue);
+            for (var i = 0; i < urlChangeQueue.length; i++) {
+                urlChangeQueue[i]();
+            }
+        }
+
         function setCookie(name, value, expiry_days, domain) {
             var expires = '';
             if (expiry_days != 0) {
@@ -1049,11 +1067,6 @@
             return;
         }
 
-        this.calledPage = false;
-        analytics.on('page', function() {
-            self.calledPage = true;
-        });
-
         this.ready = function(f) {
             analytics.ready(f);
         }
@@ -1075,7 +1088,6 @@
         }
 
         this.page = function(a, b, c) {
-            self.calledPage = true;
             analytics.page(a, b, c);
         }
 
@@ -1092,13 +1104,6 @@
             var user = analytics.user();
             var traits = user.traits();
             return traits;
-        }
-
-        this.afterSniff = function() {
-            if (!self.calledPage) {
-                // Segment.com requires we call page() at least once
-                analytics.page();
-            }
         }
     });
 
