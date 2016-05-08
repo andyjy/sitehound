@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.963 - 5th May 2016
+//  @version       0.9.64 - 5th May 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.963";
+    var VERSION = "0.9.64";
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
@@ -329,7 +329,7 @@
             self.sniffed = true;
 
             if (!self.page) {
-                self.page = self.detectPage(location.pathname);
+                self.page = self.detectPage();
             }
             self.thisPageTraits['Page Type'] = self.page;
 
@@ -691,8 +691,9 @@
             self.overrideReferrer = previousURL || document.referrer;
             self.page = undefined;
             // fire listeners
+            var page = self.detectPage();
             for (var i = 0; i < urlChangeQueue.length; i++) {
-                urlChangeQueue[i]();
+                urlChangeQueue[i](page);
             }
             // trigger sniffing for new virtual pageview
             self.sniff();
@@ -933,8 +934,9 @@
 
     SiteHound.prototype.ready = function(f) {
         if (typeof f === 'function') {
-            this.info('ready()');
-            f();
+            var page = this.detectPage();
+            this.info('ready(' + page + ')');
+            f(page);
         } else {
             if (window.console && console.error) {
                 console.error("[SiteHound] ready() called with something that isn't a function");
