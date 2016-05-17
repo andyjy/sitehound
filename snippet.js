@@ -7,7 +7,7 @@
     if (!sitehound.sniff) {
         // sitehound.js not yet loaded
 
-        if (sitehound.invoked) {
+        if (sitehound.SNIPPET_VERSION) {
             var m = 'SiteHound snippet included twice';
             if (window.console && console.error) {
                 console.error(m);
@@ -16,7 +16,6 @@
             return;
         }
 
-        sitehound.invoked = true;
         sitehound.queue = [];
 
         var methods = [
@@ -48,11 +47,11 @@
             sitehound[key] = factory(key);
         }
 
-        sitehound.sniff = sitehound.done = function() {
-            sitehound.isDone = true;
+        sitehound.sniff = function() {
+            sitehound.sniffOnLoad = true;
         }
 
-        sitehound.SNIPPET_VERSION = '1.3';
+        sitehound.SNIPPET_VERSION = '1.4';
 
         sitehound.load = function(adaptor) {
             sitehound.adaptor = adaptor;

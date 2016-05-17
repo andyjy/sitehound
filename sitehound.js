@@ -101,7 +101,10 @@
             overrideReferrer: undefined,
 
             // queued-up methods to execute
-            queue: []
+            queue: [],
+
+            // preserve from snippet to assist with debugging
+            SNIPPET_VERSION
         };
 
         var self = this;
@@ -134,7 +137,7 @@
         // privileged methods
         //
 
-        this.sniff = this.done = function() {
+        this.sniff = this.done = function() { // done(): legacy name
             try {
                 self.info('Sniffing..');
                 // check we want to track this host
@@ -845,7 +848,7 @@
         // replace the global sitehound var with our instance
         window.sitehound = this;
 
-        if (initialConfig.isDone) {
+        if (initialConfig.sniffOnLoad || initialConfig.isDone) { // isDone: legacy
             this.sniff();
         }
     }
