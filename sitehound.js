@@ -93,8 +93,10 @@
             // - defaults to true if we've passed a value (incl. null), false otherwise
             detectLogout: undefined,
 
-            // log informational messages to the console?
+            // log debugging messages to the console?
             logToConsole: false,
+            // suppress all non-error output to the console?
+            silent: false,
             // session timeout before tracking the start of a new session (in minutes)
             sessionTimeout: 30,
             // provide an overridden referrer to replce in when tracking on this page
@@ -140,7 +142,7 @@
 
         this.sniff = this.done = function() { // done(): legacy name
             try {
-                self.info('Sniffing..');
+                self.debug('Sniffing..');
                 // check we want to track this host
                 if (ignoreHost(location.hostname)) {
                     self.info('Ignoring host: ' + location.hostname);
@@ -199,14 +201,14 @@
             args = Array.prototype.slice.call(args);
             args.unshift(method);
             self.queue.push(args);
-            self.info('(Deferring ' + method + '() until sniff)');
+            self.debug('(Deferring ' + method + '() until sniff)');
             return true;
         }
 
         // like analytics.identify({..}), but only set traits if they're not already set
         this.identifyOnce = function(params) {
             if (self.deferUntilSniff('identifyOnce', arguments)) {return;}
-            self.info('identifyOnce', params);
+            self.debug('identifyOnce', params);
             self.adaptor.identify(ignoreExistingTraits(params));
         }
 
@@ -225,14 +227,14 @@
                     if (typeof pat.test === 'function') {
                         if (pat.test(path)) {
                             // regex matching URL path - TOCHECK
-                            self.info('Detected page: ' + page);
+                            self.debug('Detected page: ' + page);
                             return page;
                         }
                     } else if (pat[0] === '.') {
                         // match body css class
                         if ((path === location.pathname) &&
                             document.body.className.match(new RegExp('(?:^|\\s)' + escapeRegExp(pat.slice(1)) + '(?!\\S)'))) {
-                            self.info('Detected page: ' + page);
+                            self.debug('Detected page: ' + page);
                             return page;
                         }
                     } else {
@@ -240,7 +242,7 @@
                         // we ignore presence of trailing slash on path
                         // treat * as a wildcard
                         if (path.replace(/\/$/, '').match(new RegExp('^' + escapeRegExp(pat.replace(/\/$/, '')).replace(/\\\*/g, '.*') + '$'))) {
-                            self.info('Detected page: ' + page);
+                            self.debug('Detected page: ' + page);
                             return page;
                         }
                     }
@@ -258,7 +260,21 @@
         }
 
         this.info = function(message, object) {
-            if (!self.logToConsole || !window.console || !console.log) {
+            if (self.silent) {
+                return;
+            }
+            self.log(message, object);
+        }
+
+        this.debug = function(message, object) {
+            if (!self.logToConsole) {
+                return;
+            }
+            self.log(message, object);
+        }
+
+        this.log = function(message, object) {
+            if (!window.console || !console.log) {
                 return;
             }
             try {
@@ -291,12 +307,12 @@
                 // clear cookie - track again
                 setCookie('dnt', '', -100);
             }
-            self.info('doNotTrack', dnt ? 'true' : 'false')
+            self.debug('doNotTrack', dnt ? 'true' : 'false')
         }
 
         this.onURLChange = this.onUrlChange = function(f) {
             if (typeof f === 'function') {
-                this.info('onURLChange()');
+                this.debug('onURLChange()');
                 urlChangeQueue.push(f);
             } else {
                 if (window.console && console.error) {
@@ -354,7 +370,7 @@
             var userTraits = self.adaptor.userTraits();
             if (userTraits.createdAt) {
                 self.globalTraits['Days Since Signup'] = Math.floor((new Date()-new Date(userTraits.createdAt))/1000/60/60/24);
-                self.info('Days since signup: ' + self.globalTraits['Days Since Signup']);
+                self.debug('Days since signup: ' + self.globalTraits['Days Since Signup']);
             }
             if (self.userTraits['Email Domain']) {
                 self.userTraits['Email Domain'] = self.userTraits['Email Domain'].match(/[^@]*$/)[0];
@@ -381,7 +397,7 @@
             //
             if (self.userId) {
                 // we have a logged-in user
-                self.info('Received userId: ' + self.userId);
+                self.debug('Received userId: ' + self.userId);
                 var userTraits = {},
                     specialKeys = [
                         'name',
@@ -408,22 +424,22 @@
                 var currentUserId;
                 if (!self.adaptor.userId()) {
                     // session up to here has been anonymous
-                    self.info('Anonymous session until now - alias()');
+                    self.debug('Anonymous session until now - alias()');
                     self.adaptor.alias(self.userId);
                     // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
                     self.adaptor.identify('x');
                 } else {
                     currentUserId = self.adaptor.userId();
-                    self.info('Current userId: ' + currentUserId);
+                    self.debug('Current userId: ' + currentUserId);
                 }
-                self.info('identify(' + self.userId + ', [traits])');
+                self.debug('identify(' + self.userId + ', [traits])');
                 if (self.userId !== currentUserId) {
                     // TOCHECK - set time of email verification as the user creation time
                     traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
                 }
                 self.adaptor.identify(self.userId, traits);
                 if (self.userId !== currentUserId) {
-                    self.info('userId != currentUserId - Login');
+                    self.debug('userId != currentUserId - Login');
                     self.track('Login');
                 }
                 setCookie('logged_out', '', -100);
@@ -434,14 +450,14 @@
                 //  - even if it's been set to null
                 self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
                 if (self.detectLogout) {
-                    self.info('Detecting potential logout..');
+                    self.debug('Detecting potential logout..');
                     if (self.adaptor.userId()) {
                         // we were logged in earlier in the session
                         // track only once until next login
                         if (!getCookie('logged_out')) {
                             self.track('Logout');
                             setCookie('logged_out', true);
-                            self.info('Logout');
+                            self.debug('Logout');
                         }
                     }
                 }
@@ -476,8 +492,8 @@
             var daysSinceFirst = Math.floor((new Date() - new Date(firstSeen))/1000/60/60/24);
             self.globalTraits['First Seen'] = firstSeen;
             self.globalTraits['Days Since First Seen'] = daysSinceFirst;
-            self.info('Visitor first seen: ' + firstSeen);
-            self.info('Days since first seen: ' + daysSinceFirst);
+            self.debug('Visitor first seen: ' + firstSeen);
+            self.debug('Days since first seen: ' + daysSinceFirst);
 
             // session start + last updated time
             var sessionStarted = getCookie('sessionStarted') || new Date().toISOString(),
@@ -486,12 +502,12 @@
                 sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
             self.globalTraits['Session Started'] = sessionStarted;
             self.globalTraits['Minutes Since Session Start'] = sessionDuration;
-            self.info('Session started: ' + sessionStarted);
-            self.info('Session duration: ' + sessionDuration);
-            self.info('Minutes since last event: ' + sessionSilent);
+            self.debug('Session started: ' + sessionStarted);
+            self.debug('Session duration: ' + sessionDuration);
+            self.debug('Minutes since last event: ' + sessionSilent);
             var sessionTimedOut = sessionSilent > self.sessionTimeout;
             if (sessionTimedOut) {
-                self.info('Session timed out - tracking as new session');
+                self.debug('Session timed out - tracking as new session');
                 sessionStarted = new Date().toISOString();
             }
             setCookie('sessionStarted', sessionStarted);
@@ -501,7 +517,7 @@
             var pageViews = (sessionTimedOut ? 0 : parseInt(getCookie('pageViews') || 0)) + 1;
             self.thisPageTraits['Pageviews This Session'] = pageViews;
             setCookie('pageViews', pageViews);
-            self.info('Pageviews: ' + pageViews);
+            self.debug('Pageviews: ' + pageViews);
 
             var referrerParts = document.referrer.match(/https?:\/\/([^/]+)(\/.*)/),
                 referrerHost = null,
@@ -521,14 +537,14 @@
                     return;
                 }
                 self.isLandingPage = true;
-                self.info('Detected landing page');
+                self.debug('Detected landing page');
             }
 
             // session count for this visitor
             var sessionCount = parseInt(getCookie('sessionCount') || 0) + 1;
             self.globalTraits['Session Count'] = sessionCount;
             setCookie('sessionCount', sessionCount, 366);
-            self.info('Session count: ' + sessionCount);
+            self.debug('Session count: ' + sessionCount);
 
             if (sessionTimedOut) {
                 // we don't update attribution tracking when tracking a new session due to inactivity
@@ -555,8 +571,8 @@
             // utm params
             var utmParams = getUTMParams();
             if (Object.keys(utmParams).length > 0) {
-                self.info('utm params:');
-                self.info(utmParams);
+                self.debug('utm params:');
+                self.debug(utmParams);
                 attributionParams = mergeObjects(attributionParams, utmParams);
             }
 
@@ -567,7 +583,7 @@
             if (referrerHost === location.host) {
                 // Did we specify to track this particular referrer as the original landing page?
                 if (self.trackReferrerLandingPages.indexOf(referrerPath) !== -1) {
-                    self.info('Detected known untracked landing page: ' + document.referrer);
+                    self.debug('Detected known untracked landing page: ' + document.referrer);
                     self.trackLandingPage = true;
                     self.landingPageTraits = {
                         path: referrerPath,
@@ -625,19 +641,19 @@
                 attributionParamsLast[key + ' [last touch]'] = attributionParams[key];
             }
 
-            self.info('Attribution params:');
-            self.info(attributionParams);
+            self.debug('Attribution params:');
+            self.debug(attributionParams);
             if (sessionCount == 1) {
                 // only track first touch params on first session
-                self.info('..setting first touch params');
+                self.debug('..setting first touch params');
                 self.globalTraits = mergeObjects(self.globalTraits, ignoreExistingTraits(attributionParamsFirst));
             }
-            self.info('..setting last touch params');
+            self.debug('..setting last touch params');
             self.globalTraits = mergeObjects(self.globalTraits, attributionParamsLast);
         }
 
         function trackPage(one, two, three) {
-            self.info('Viewed Page: ', [one, two, three]);
+            self.debug('Viewed Page: ', [one, two, three]);
             if (typeof three === 'object') {
                 self.adaptor.page(one, two, self.getTraitsToSend(three));
             } else if (typeof two === 'object') {
@@ -690,7 +706,7 @@
         }
 
         function urlChanged(previousURL) {
-            self.info('Detected URL change: ' + location.href);
+            self.debug('Detected URL change: ' + location.href);
             // reset config for the new URL
             self.overrideReferrer = previousURL || document.referrer;
             self.page = undefined;
@@ -835,13 +851,13 @@
         //
         // final initialisation steps
         //
-        this.info('Ready (v' + VERSION + ')');
+        this.info('Library loaded (version ' + VERSION + ')');
 
         this.cookieDomain = topDomain(location.hostname);
-        this.info('Cookie domain: ' + this.cookieDomain);
+        this.debug('Cookie domain: ' + this.cookieDomain);
 
         if (getCookie('dnt')) {
-            this.info('do-not-track cookie present');
+            this.info('Do-not-track cookie present');
             this.adaptor = 'disabled';
             return;
         }
@@ -860,7 +876,7 @@
 
     SiteHound.prototype.identify = function(a, b) {
         if (this.deferUntilSniff('identify', arguments)) {return;}
-        this.info('identify', [a, b]);
+        this.debug('identify', [a, b]);
         this.adaptor.identify(a, b);
     }
 
@@ -872,7 +888,7 @@
         } else {
             traits = this.getTraitsToSend();
         }
-        this.info('track', [event, traits]);
+        this.debug('track', [event, traits]);
         this.adaptor.track(event, traits);
     }
 
@@ -880,7 +896,7 @@
     SiteHound.prototype.trackOnce = function(event, params) {
         if (this.deferUntilSniff('trackOnce', arguments)) {return;}
 
-        this.info('trackOnce', [event, params]);
+        this.debug('trackOnce', [event, params]);
 
         var traits = this.adaptor.userTraits();
         if (traits['First ' + event] === undefined) {
@@ -895,7 +911,7 @@
     SiteHound.prototype.trackAndCount = function(event, params) {
         if (this.deferUntilSniff('trackAndCount', arguments)) {return;}
 
-        this.info('trackAndCount', [event, params]);
+        this.debug('trackAndCount', [event, params]);
         var traits = this.adaptor.userTraits();
 
         var count = 1;
@@ -920,7 +936,7 @@
         var elementInfo = {};
         if (elements && elements.selector) { elementInfo.selector = elements.selector; }
         if (elements && elements.length) { elementInfo.length = elements.length; }
-        this.info('trackLink', [elementInfo, name]);
+        this.debug('trackLink', [elementInfo, name]);
 
         this.adaptor.trackLink(elements, name, this.getTraitsToSend());
     }
@@ -931,7 +947,7 @@
         var elementInfo = {};
         if (elements && elements.selector) { elementInfo.selector = elements.selector; }
         if (elements && elements.length) { elementInfo.length = elements.length; }
-        this.info('trackForm', [elementInfo, name]);
+        this.debug('trackForm', [elementInfo, name]);
 
         this.adaptor.trackForm(elements, name, this.getTraitsToSend());
     }
@@ -939,7 +955,7 @@
     SiteHound.prototype.ready = function(f) {
         if (typeof f === 'function') {
             var page = this.detectPage();
-            this.info('ready(' + page + ')');
+            this.debug('ready(' + page + ')');
             f(page);
         } else {
             if (window.console && console.error) {
@@ -950,14 +966,14 @@
 
     SiteHound.prototype.getUserTraits = function() {
         result = mergeObjects(this.adaptor.userTraits(), this.userTraits);
-        this.info('getUserTraits() returned ', result);
+        this.debug('getUserTraits() returned ', result);
         return result;
     }
 
     SiteHound.prototype.load = function(adaptor) {
-        this.info('load() called when already loaded');
+        this.debug('load() called when already loaded');
         if (adaptor) {
-            this.info('updating adaptor to: ' + adaptor);
+            this.debug('updating adaptor to: ' + adaptor);
             this.adaptor = getAdaptor(adaptor);
         }
     }
@@ -983,7 +999,7 @@
             level: level,
             'SiteHound library version': this.VERSION
         });
-        this.info('[' + level + '] ' + message);
+        this.debug('[' + level + '] ' + message);
     }
 
     SiteHound.prototype.trackError = function(error) {
