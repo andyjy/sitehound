@@ -103,7 +103,6 @@
             overrideReferrer: undefined,
 
             // queued-up methods to execute
-            // TOCHECK: will mean any existing queue will be processed twice?
             queue: [],
 
             // preserve from snippet to assist with debugging
@@ -682,27 +681,26 @@
 
         function replayQueue() {
             replay(getQueue());
-            replay(self.queue);
         }
 
         function getQueue(methods) {
-            if (!initialConfig.queue || !initialConfig.queue.length) {
+            if (!self.queue || !self.queue.length) {
                 return;
             }
             if (!methods || !methods.length) {
-                var queue = initialConfig.queue;
-                initialConfig.queue = [];
+                var queue = self.queue;
+                self.queue = [];
                 return queue;
             }
             var selected = [], remaining = [];
-            for (var i = 0; i < initialConfig.queue.length; i++) {
-                if (methods.indexOf(initialConfig.queue[i][0]) !== -1) {
-                    selected.push(initialConfig.queue[i]);
+            for (var i = 0; i < self.queue.length; i++) {
+                if (methods.indexOf(self.queue[i][0]) !== -1) {
+                    selected.push(self.queue[i]);
                 } else {
-                    remaining.push(initialConfig.queue[i]);
+                    remaining.push(self.queue[i]);
                 }
             }
-            initialConfig.queue = remaining;
+            self.queue = remaining;
             return selected;
         }
 
@@ -783,6 +781,10 @@
         function ignoreExistingTraits(params) {
             var traits = self.adaptor.userTraits(),
                 newParams = {};
+            if (typeof traits === 'undefined') {
+                // current traits undefined - all params are new
+                return params;
+            }
             for (var key in params) {
                 if (!(key in traits)) {
                     newParams[key] = params[key];
