@@ -154,9 +154,6 @@
                     return;
                 }
 
-                // replay any ready() events queued up by the snippet before the lib was loaded
-                replayReady();
-
                 var firstSniff = !self.sniffed;
                 // core tracking for on page load
                 doSniff();
@@ -882,6 +879,9 @@
 
         // replace the global sitehound var with our instance
         window.sitehound = this;
+
+        // replay any ready() events queued up by the snippet before the lib was loaded
+        replayReady();
 
         if (initialConfig.sniffOnLoad || initialConfig.isDone) { // isDone: legacy
             this.sniff();
