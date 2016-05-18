@@ -310,6 +310,17 @@
             self.debug('doNotTrack', dnt ? 'true' : 'false')
         }
 
+        this.debugMode = function(logToConsole) {
+            self.logToConsole = logToConsole = (typeof logToConsole === 'undefined') ? true : !!logToConsole;
+            if (logToConsole) {
+                setCookie('logToConsole', '1', 1000);
+            } else {
+                // clear cookie - track again
+                setCookie('logToConsole', '', -100);
+            }
+            self.debug('doNotTrack', logToConsole ? 'true' : 'false')
+        }
+
         this.onURLChange = this.onUrlChange = function(f) {
             if (typeof f === 'function') {
                 this.debug('onURLChange()');
@@ -860,6 +871,11 @@
             this.info('Do-not-track cookie present');
             this.adaptor = 'disabled';
             return;
+        }
+
+        // debug mode?
+        if (getCookie('logToConsole')) {
+            this.logToConsole = true;
         }
 
         // replace the global sitehound var with our instance
