@@ -101,6 +101,7 @@
             overrideReferrer: undefined,
 
             // queued-up methods to execute
+            // TOCHECK: will mean any existing queue will be processed twice?
             queue: [],
 
             // preserve from snippet to assist with debugging
