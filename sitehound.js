@@ -54,64 +54,12 @@
     }
 
     function SiteHound(initialConfig, adaptor) {
-        var config = {
-            // object mapping names to match patterns for key pages we want to track
-            // - by default we match against the page URL (location.pathname)
-            // - strings beginning with a '.' match css classes on the <body>
-            // match patterns can be simple strings, arrays, or regular expressions
-            trackPages: null,
-            // override detection of the current page (and therefore track this pageview event)
-            page: null,
-            // track all other pageviews not covered above? (as "unidentified")
-            trackAllPages: false,
-            // detect and track new pageview events if the window.location changes?
-            detectURLChange: true,
-            detectHashChange: false,
-
-            // disable tracking on particular hosts
-            domainsIgnore: ['localhost', 'gtm-msr.appspot.com'],
-            domainsIgnoreIPAddress: true,
-            domainsIgnoreSubdomains: ['staging', 'test'],
-
-            // if we have any landing pages without this tracking installed, list them here
-            // in order to track them as the "true" landing page when the user clicks through to
-            // a page with tracking
-            trackReferrerLandingPages: [],
-
-            // traits to set globally for this user/session
-            globalTraits: {},
-            // traits to set only on any page event we may trigger during this pageview
-            pageTraits: {},
-            // traits to set on all events during this pageview, but not set globally for subsequent pageviews
-            thisPageTraits: {},
-
-            // do we have an ID for a logged-in user?
-            userId: undefined,
-            // traits to set on the user (like globalTraits, but will be prefixed with "User " to distinguish them)
-            userTraits: {},
-            // should we fire a logout event on this page if we don't have a userId set but were previously logged in?
-            // - defaults to true if we've passed a value (incl. null), false otherwise
-            detectLogout: undefined,
-
-            // log debugging messages to the console?
-            logToConsole: false,
-            // suppress all non-error output to the console?
-            silent: false,
-            // session timeout before tracking the start of a new session (in minutes)
-            sessionTimeout: 30,
-            // provide an overridden referrer to replce in when tracking on this page
-            overrideReferrer: undefined,
-
-            // queued-up methods to execute
-            queue: [],
-
-            // preserve from snippet to assist with debugging
-            SNIPPET_VERSION: undefined
-        };
-
         var self = this;
 
-        this.sniffed = false;
+        // for auto-detection of page URL change (single-page sites e.g. angularjs)
+        var intervalId,
+            currentURL,
+            urlChangeQueue = [];
 
         this.adaptor = adaptor;
         if ((typeof adaptor !== 'object') || !adaptor.check()) {
@@ -121,19 +69,103 @@
             return;
         }
 
-        for (var key in config) {
-            if (initialConfig[key] !== undefined) {
-                config[key] = initialConfig[key];
+        // wrapper for initialization
+        !function() {
+            var config = {
+                // object mapping names to match patterns for key pages we want to track
+                // - by default we match against the page URL (location.pathname)
+                // - strings beginning with a '.' match css classes on the <body>
+                // match patterns can be simple strings, arrays, or regular expressions
+                trackPages: null,
+                // override detection of the current page (and therefore track this pageview event)
+                page: null,
+                // track all other pageviews not covered above? (as "unidentified")
+                trackAllPages: false,
+                // detect and track new pageview events if the window.location changes?
+                detectURLChange: true,
+                detectHashChange: false,
+
+                // disable tracking on particular hosts
+                domainsIgnore: ['localhost', 'gtm-msr.appspot.com'],
+                domainsIgnoreIPAddress: true,
+                domainsIgnoreSubdomains: ['staging', 'test'],
+
+                // if we have any landing pages without this tracking installed, list them here
+                // in order to track them as the "true" landing page when the user clicks through to
+                // a page with tracking
+                trackReferrerLandingPages: [],
+
+                // traits to set globally for this user/session
+                globalTraits: {},
+                // traits to set only on any page event we may trigger during this pageview
+                pageTraits: {},
+                // traits to set on all events during this pageview, but not set globally for subsequent pageviews
+                thisPageTraits: {},
+
+                // do we have an ID for a logged-in user?
+                userId: undefined,
+                // traits to set on the user (like globalTraits, but will be prefixed with "User " to distinguish them)
+                userTraits: {},
+                // should we fire a logout event on this page if we don't have a userId set but were previously logged in?
+                // - defaults to true if we've passed a value (incl. null), false otherwise
+                detectLogout: undefined,
+
+                // log debugging messages to the console?
+                logToConsole: false,
+                // suppress all non-error output to the console?
+                silent: false,
+                // session timeout before tracking the start of a new session (in minutes)
+                sessionTimeout: 30,
+                // provide an overridden referrer to replce in when tracking on this page
+                overrideReferrer: undefined,
+
+                // queued-up methods to execute
+                queue: [],
+
+                // preserve from snippet to assist with debugging
+                SNIPPET_VERSION: undefined
+            };
+
+            self.sniffed = false;
+
+            for (var key in config) {
+                if (initialConfig[key] !== undefined) {
+                    config[key] = initialConfig[key];
+                }
+                self[key] = config[key];
             }
-            this[key] = config[key];
+
+            self.thisPageTraits['SiteHound library version'] = self.VERSION = VERSION;
+        }();
+
+        // final initialization steps
+        function completeInit() {
+            self.info('Library loaded (version ' + VERSION + ')');
+
+            self.cookieDomain = topDomain(location.hostname);
+            self.debug('Cookie domain: ' + self.cookieDomain);
+
+            if (getCookie('dnt')) {
+                self.info('Do-not-track cookie present');
+                self.adaptor = 'disabled';
+                return;
+            }
+
+            // debug mode?
+            if (getCookie('logToConsole')) {
+                self.logToConsole = true;
+            }
+
+            // replace the global sitehound var with our instance
+            window.sitehound = self;
+
+            // replay any ready() events queued up by the snippet before the lib was loaded
+            replayReady();
+
+            if (initialConfig.sniffOnLoad || initialConfig.isDone) { // isDone: legacy
+                self.sniff();
+            }
         }
-
-        this.thisPageTraits['SiteHound library version'] = this.VERSION = VERSION;
-
-        // for auto-detection of page URL change (single-page sites e.g. angularjs)
-        var intervalId,
-            currentURL,
-            urlChangeQueue = [];
 
         //
         // privileged methods
@@ -858,34 +890,8 @@
         };
         // END grab from https://github.com/segmentio/top-domain
 
-        //
         // final initialisation steps
-        //
-        this.info('Library loaded (version ' + VERSION + ')');
-
-        this.cookieDomain = topDomain(location.hostname);
-        this.debug('Cookie domain: ' + this.cookieDomain);
-
-        if (getCookie('dnt')) {
-            this.info('Do-not-track cookie present');
-            this.adaptor = 'disabled';
-            return;
-        }
-
-        // debug mode?
-        if (getCookie('logToConsole')) {
-            this.logToConsole = true;
-        }
-
-        // replace the global sitehound var with our instance
-        window.sitehound = this;
-
-        // replay any ready() events queued up by the snippet before the lib was loaded
-        replayReady();
-
-        if (initialConfig.sniffOnLoad || initialConfig.isDone) { // isDone: legacy
-            this.sniff();
-        }
+        completeInit();
     }
 
     //
