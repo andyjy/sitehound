@@ -107,7 +107,7 @@
             queue: [],
 
             // preserve from snippet to assist with debugging
-            SNIPPET_VERSION
+            SNIPPET_VERSION: undefined
         };
 
         var self = this;
