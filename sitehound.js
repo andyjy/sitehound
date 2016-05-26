@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.64 - 25th May 2016
+//  @version       0.9.65 - 26th May 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.64";
+    var VERSION = "0.9.65";
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
