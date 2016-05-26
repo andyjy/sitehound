@@ -392,16 +392,6 @@
             }
             self.thisPageTraits['Page Type'] = self.page;
 
-            if (self.overrideReferrer !== undefined) {
-                self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
-                //var referrerParts = self.thisPageTraits['referrer'].match(/https?:\/\/([^/]+)(\/.*)/),
-                //    referrerHost;
-                //if (referrerParts) {
-                //    referrerHost = referrerParts[1];
-                //}
-                //self.thisPageTraits['Referring Domain'] = self.thisPageTraits['$referring_domain'] = referrerHost;
-            }
-
             // collect data related to the current session
             examineSession();
 
@@ -429,6 +419,13 @@
                         _old_fs_ready();
                     }
                 };
+            }
+
+            // Optimizely
+            var optimizelyEvents = detectOptimizelyExperiments(userTraits);
+
+            if (self.overrideReferrer !== undefined) {
+                self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
             }
 
             //
@@ -521,6 +518,11 @@
                 trackPage.apply(self, pageParts);
             } else if (self.trackAllPages) {
                 trackPage('Unidentified');
+            }
+
+            // track Optimizely experiment views after we've handled user identification and page tracking
+            for (var i = 0; i < optimizelyEvents.length; i++) {
+                self.track(optimizelyEvents[i][0], optimizelyEvents[i][1]);
             }
         }
 
@@ -689,6 +691,69 @@
             }
             self.debug('..setting last touch params');
             self.globalTraits = mergeObjects(self.globalTraits, attributionParamsLast);
+        }
+
+        function detectOptimizelyExperiments(userTraits) {
+            var result = [];
+
+            var optimizely = window.optimizely;
+            if (!optimizely || !optimizely.data) {
+                return result;
+            }
+
+            var oData = optimizely.data;
+            var oState = oData.state,
+                oSections = oData.sections;
+            var activeExperiments = oState.activeExperiments;
+
+            if(oState.redirectExperiment) {
+                var redirectExperimentId = oState.redirectExperiment.experimentId;
+                var index = oState.activeExperiments.indexOf(redirectExperimentId);
+                if (index === -1) {
+                    activeExperiments.push(redirectExperimentId);
+                    self.overrideReferrer = oState.redirectExperiment.referrer;
+                }
+            }
+
+            if (activeExperiments.length > 0) {
+                var oEsKey = 'Optimizely Experiments',
+                    oVsKey = 'Optimizely Variations';
+                var oEs = userTraits[oEsKey],
+                    oVs = userTraits[oVsKey];
+                self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
+                self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
+
+                for (var i = 0; i < activeExperiments.length; i++) {
+                    var experimentId = activeExperiments[i];
+                    var variationId = oState.variationIdsMap[experimentId][0].toString();
+                    var experimentTraits = {
+                        'Experiment ID': experimentId,
+                        'Experiment Name': oData.experiments[experimentId].name,
+                        'Experiment First View': !oEs || !oEs.indexOf || (oEs.indexOf(experimentId) === -1),
+                        'Variation ID': variationId,
+                        'Variation Name': oState.variationNamesMap[experimentId]
+                    };
+                    if (self.globalTraits[oEsKey].indexOf(experimentId) === -1) {
+                        self.globalTraits[oEsKey].push(experimentId);
+                    }
+                    var multiVariate = oSections[experimentId];
+                    if (multiVariate) {
+                        experimentTraits['Section Name'] = multiVariate.name;
+                        experimentTraits['Variation ID'] = multiVariate.variation_ids.join();
+                        for (var v = 0; v < multiVariate.variation_ids.length; v++) {
+                            if (self.globalTraits[oVsKey].indexOf(multiVariate.variation_ids[v]) === -1) {
+                                self.globalTraits[oVsKey].push(multiVariate.variation_ids[v]);
+                            }
+                        }
+                    } else {
+                        if (self.globalTraits[oVsKey].indexOf(variationId) === -1) {
+                            self.globalTraits[oVsKey].push(variationId);
+                        }
+                    }
+                    result.push(['Optimizely Experiment Viewed', experimentTraits]);
+                }
+            }
+            return result;
         }
 
         function trackPage(one, two, three) {
