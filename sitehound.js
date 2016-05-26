@@ -402,8 +402,8 @@
                 //self.thisPageTraits['Referring Domain'] = self.thisPageTraits['$referring_domain'] = referrerHost;
             }
 
-            // track data related to the current session
-            trackSession();
+            // collect data related to the current session
+            examineSession();
 
             // some user-related properties
             var userTraits = self.adaptor.userTraits();
@@ -524,7 +524,7 @@
             }
         }
 
-        function trackSession() {
+        function examineSession() {
             // visitor first seen
             var firstSeen = getCookie('firstSeen') || new Date().toISOString();
             setCookie('firstSeen', firstSeen, 366);
