@@ -346,7 +346,7 @@
                 // clear cookie - track again
                 setCookie('logToConsole', '', -100);
             }
-            self.debug('doNotTrack', logToConsole ? 'true' : 'false')
+            self.debug('debugMode', logToConsole ? 'true' : 'false')
         }
 
         this.onURLChange = this.onUrlChange = function(f) {

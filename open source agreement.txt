@@ -1,0 +1,6 @@
+- I agree to provide you with some free code which solves your problem.
+- I recognize that in doing so, I have taken on a small portion of responsibility to you as a user of my code.
+- I agree to try to help you if you have difficulty in using my code.
+- I agree to try to fix bugs that you find in my code.
+- Crucially, you agree that I, in acting without remuneration, am free to assign priority to the above points as I see fit.
+- If I don't have the time or interest to support the project any longer, I agree to reach out to trusted contributors and give them commit rights, or put a clear notice on the readme: "This project is not actively maintained" so users can make an informed choice.
