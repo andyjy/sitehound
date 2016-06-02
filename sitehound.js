@@ -539,18 +539,18 @@
             // session start + last updated time
             var sessionStarted = getCookie('sessionStarted') || new Date().toISOString(),
                 sessionUpdated = getCookie('sessionUpdated') || new Date().toISOString();
-            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60),
-                sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
-            self.globalTraits['Session Started'] = sessionStarted;
-            self.globalTraits['Minutes Since Session Start'] = sessionDuration;
+            var sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
             self.debug('Session started: ' + sessionStarted);
-            self.debug('Session duration: ' + sessionDuration);
             self.debug('Minutes since last event: ' + sessionSilent);
             var sessionTimedOut = sessionSilent > self.sessionTimeout;
             if (sessionTimedOut) {
                 self.debug('Session timed out - tracking as new session');
                 sessionStarted = new Date().toISOString();
             }
+            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60);
+            self.debug('Session duration: ' + sessionDuration);
+            self.globalTraits['Session Started'] = sessionStarted;
+            self.globalTraits['Minutes Since Session Start'] = sessionDuration;
             setCookie('sessionStarted', sessionStarted);
             setCookie('sessionUpdated', new Date().toISOString());
 
