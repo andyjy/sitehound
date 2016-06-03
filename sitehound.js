@@ -233,6 +233,25 @@
             return true;
         }
 
+        this.identify = function(a, b) {
+            self.debug('identify', [a, b]);
+            if (typeof b === 'object') {
+                // (id, traits)
+                self.userId = a;
+                self.globalTraits = mergeObjects(self.globalTraits, b);
+            } else if (typeof a === 'object') {
+                // (traits)
+                self.globalTraits = mergeObjects(self.globalTraits, a);
+            } else {
+                // (id)
+                self.userId = a;
+            }
+            if (self.sniffed) {
+                // already sniffed - call adaptor.identify()
+                doIdentify();
+            } // else - adaptor.identify() will be called when we sniff()
+        }
+
         // like analytics.identify({..}), but only set traits if they're not already set
         this.identifyOnce = function(params) {
             if (self.deferUntilSniff('identifyOnce', arguments)) {return;}
@@ -428,76 +447,8 @@
                 self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
             }
 
-            //
-            // identify(), including user tracking as relevnt
-            //
-            if (self.userId) {
-                // we have a logged-in user
-                self.debug('Received userId: ' + self.userId);
-                var userTraits = {},
-                    specialKeys = [
-                        'name',
-                        'email',
-                        'createdAt'
-                    ];
-                for (var key in self.userTraits) {
-                    // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
-                    // get the traits from the adaptor?
-                    var keyLower = key.toLowerCase(),
-                        newKey = '';
-                    for (var i = 0; i < specialKeys.length; i++) {
-                        if (keyLower === specialKeys[i].toLowerCase()) {
-                            newKey = specialKeys[i];
-                            break;
-                        }
-                    }
-                    if (!newKey) {
-                        newKey = 'User ' + titleCase(key);
-                    }
-                    userTraits[newKey] = self.userTraits[key];
-                }
-                var traits = mergeObjects(self.globalTraits, userTraits);
-                var currentUserId;
-                if (!self.adaptor.userId()) {
-                    // session up to here has been anonymous
-                    self.debug('Anonymous session until now - alias()');
-                    self.adaptor.alias(self.userId);
-                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
-                    self.adaptor.identify('x');
-                } else {
-                    currentUserId = self.adaptor.userId();
-                    self.debug('Current userId: ' + currentUserId);
-                }
-                self.debug('identify(' + self.userId + ', [traits])');
-                if (self.userId !== currentUserId) {
-                    // TOCHECK - set time of email verification as the user creation time
-                    traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
-                }
-                self.adaptor.identify(self.userId, traits);
-                if (self.userId !== currentUserId) {
-                    self.debug('userId != currentUserId - Login');
-                    self.track('Login');
-                }
-                setCookie('logged_out', '', -100);
-            } else {
-                // no information about whether the user is currently logged in
-                self.adaptor.identify(self.globalTraits);
-                // by default, automatically detect logout if the userId property has been set
-                //  - even if it's been set to null
-                self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
-                if (self.detectLogout) {
-                    self.debug('Detecting potential logout..');
-                    if (self.adaptor.userId()) {
-                        // we were logged in earlier in the session
-                        // track only once until next login
-                        if (!getCookie('logged_out')) {
-                            self.track('Logout');
-                            setCookie('logged_out', true);
-                            self.debug('Logout');
-                        }
-                    }
-                }
-            }
+            // handle user identification, including login/logout
+            doIdentify();
 
             // track landing page event?
             if (self.trackLandingPage) {
@@ -756,6 +707,74 @@
             return result;
         }
 
+        // handle user identification, including login/logout
+        function doIdentify() {
+            if (self.userId) {
+                // we have a logged-in user
+                self.debug('doIdentify(): received userId: ' + self.userId);
+                var userTraits = {},
+                    specialKeys = [
+                        'name',
+                        'email',
+                        'createdAt'
+                    ];
+                for (var key in self.userTraits) {
+                    // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
+                    // get the traits from the adaptor?
+                    var keyLower = key.toLowerCase(),
+                        newKey = '';
+                    for (var i = 0; i < specialKeys.length; i++) {
+                        if (keyLower === specialKeys[i].toLowerCase()) {
+                            newKey = specialKeys[i];
+                            break;
+                        }
+                    }
+                    if (!newKey) {
+                        newKey = 'User ' + titleCase(key);
+                    }
+                    userTraits[newKey] = self.userTraits[key];
+                }
+                var traits = mergeObjects(self.globalTraits, userTraits);
+                var currentUserId;
+                if (!self.adaptor.userId()) {
+                    // session up to here has been anonymous
+                    self.debug('Anonymous session until now - alias()');
+                    self.adaptor.alias(self.userId);
+                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
+                    self.adaptor.identify('x');
+                } else {
+                    currentUserId = self.adaptor.userId();
+                    self.debug('Current userId: ' + currentUserId);
+                }
+                self.debug('adaptor.identify(' + self.userId + ', [traits])');
+                if (self.userId !== currentUserId) {
+                    // TOCHECK - set time of email verification as the user creation time
+                    traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
+                }
+                self.adaptor.identify(self.userId, traits);
+                if (self.userId !== currentUserId) {
+                    self.debug('userId != currentUserId - Login');
+                    self.track('Login');
+                }
+                setCookie('logged_out', '', -100);
+            } else {
+                // no information about whether the user is currently logged in
+                self.adaptor.identify(self.globalTraits);
+                // by default, automatically detect logout if the userId property has been set
+                //  - even if it's been set to null
+                self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
+                if (self.detectLogout && !getCookie('logged_out')) {
+                    self.debug('doIdentify(): detecting potential logout..');
+                    if (self.adaptor.userId()) {
+                        // we were logged in earlier in the session
+                        self.track('Logout');
+                        setCookie('logged_out', true);
+                        self.debug('Logout');
+                    }
+                }
+            }
+        }
+
         function trackPage(one, two, three) {
             self.debug('Viewed Page: ', [one, two, three]);
             if (typeof three === 'object') {
@@ -963,10 +982,10 @@
     // public methods
     //
 
-    SiteHound.prototype.identify = function(a, b) {
-        if (this.deferUntilSniff('identify', arguments)) {return;}
-        this.debug('identify', [a, b]);
-        this.adaptor.identify(a, b);
+    SiteHound.prototype.alias = function(new) {
+        if (this.deferUntilSniff('alias', arguments)) {return;}
+        this.debug('alias', [a]);
+        this.adaptor.alias(a);
     }
 
     SiteHound.prototype.track = function(event, traits) {
