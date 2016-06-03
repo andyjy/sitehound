@@ -1,5 +1,5 @@
 !function() {
-    var sitehound = window.sitehound = window.sitehound || {};
+    var sitehound = window.sitehound = window.sitehound || [];
 
     var SCRIPT_URL = ('https:' === document.location.protocol ? 'https://' : 'http://')
         + 'andyyoung.github.io/sitehound/sitehound-min.js';
@@ -37,7 +37,7 @@
             return function() {
                 var args = Array.prototype.slice.call(arguments);
                 args.unshift(method);
-                sitehound.queue.push(args);
+                sitehound.push(args);
                 return sitehound;
             };
         };
@@ -51,7 +51,7 @@
             sitehound.sniffOnLoad = true;
         }
 
-        sitehound.SNIPPET_VERSION = '1.4';
+        sitehound.SNIPPET_VERSION = '1.5';
 
         sitehound.load = function(adaptor) {
             sitehound.adaptor = adaptor;

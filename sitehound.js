@@ -37,7 +37,7 @@
 
     // kickoff
     function init() {
-        var initialConfig = window.sitehound || {};
+        var initialConfig = window.sitehound = window.sitehound || [];
 
         var adaptor = getAdaptor(initialConfig.adaptor);
         if (!adaptor) {
@@ -48,7 +48,7 @@
         // initialize SiteHound when our adaptor's target library is ready
         adaptor.ready(function() {
             // grab our custom config and calls, if any
-            var initialConfig = window.sitehound || {};
+            var initialConfig = window.sitehound || [];
             // initialize SiteHound library, passing in our custom config
             var sitehound = new SiteHound(initialConfig, adaptor);
         });
@@ -127,11 +127,20 @@
 
             self.sniffed = false;
 
+            // process array-style queue
             for (var key in config) {
                 if (initialConfig[key] !== undefined) {
                     config[key] = initialConfig[key];
                 }
                 self[key] = config[key];
+            }
+
+            if (initialConfig.length && initialConfig.pop) {
+                // window.sitehound quacks like an array
+                for (var i = 0; i < b.length; i++) {
+                    // prepend each method call to the queue
+                    self.queue.unshift(initialConfig.pop());
+                }
             }
 
             self.thisPageTraits['SiteHound library version'] = self.VERSION = VERSION;
@@ -985,6 +994,19 @@
     //
     // public methods
     //
+
+    SiteHound.prototype.push = function(args) {
+        if (!typeof args === 'object') {
+            this.debug('push() requires ([method, [args]]), received: ', args);
+            return;
+        }
+        var method = args.shift();
+        if (self[method]) {
+            self[method].apply(self, args);
+        } else {
+            this.debug('Unrecognised method: ' + method);
+        }
+    }
 
     SiteHound.prototype.alias = function(new) {
         if (this.deferUntilSniff('alias', arguments)) {return;}
