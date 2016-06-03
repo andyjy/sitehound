@@ -140,13 +140,13 @@
 
         // final initialization steps
         function completeInit() {
-            self.info('Library loaded (version ' + VERSION + ')');
+            self.info('Loaded (version ' + VERSION + ', adaptor:' + (self.adaptor ? self.adaptor.klass : 'undefined') + ')');
 
             self.cookieDomain = topDomain(location.hostname);
             self.debug('Cookie domain: ' + self.cookieDomain);
 
             if (getCookie('dnt')) {
-                self.info('Do-not-track cookie present');
+                self.info('Do-not-track cookie present - disabling.');
                 self.adaptor = 'disabled';
                 return;
             }
@@ -173,7 +173,7 @@
 
         this.sniff = this.done = function() { // done(): legacy name
             try {
-                self.debug('Sniffing..');
+                self.info('sniff()');
                 // check we want to track this host
                 if (ignoreHost(location.hostname)) {
                     self.info('Ignoring host: ' + location.hostname);
@@ -181,7 +181,7 @@
                     return;
                 }
                 if (getCookie('dnt')) {
-                    self.info('do-not-track cookie present');
+                    self.info('Do-not-track cookie present - disabling.');
                     self.adaptor = 'disabled';
                     return;
                 }
@@ -1062,8 +1062,8 @@
     SiteHound.prototype.load = function(adaptor) {
         this.debug('load() called when already loaded');
         if (adaptor) {
-            this.debug('updating adaptor to: ' + adaptor);
             this.adaptor = getAdaptor(adaptor);
+            this.info('Updated adaptor to: ' + adaptor.klass);
         }
     }
 
@@ -1125,6 +1125,7 @@
 
     function registerAdaptor(klass, adaptor) {
         adaptors[klass] = adaptor;
+        adaptor.klass = klass;
     }
 
     function getAdaptor(adaptor) {
