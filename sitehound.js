@@ -29,7 +29,8 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.65";
+    var VERSION = "0.9.65",
+        CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
@@ -63,9 +64,7 @@
 
         this.adaptor = adaptor;
         if ((typeof adaptor !== 'object') || !adaptor.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] adaptor not valid');
-            }
+            error('adaptor not valid');
             return;
         }
 
@@ -158,6 +157,11 @@
 
             // replace the global sitehound var with our instance
             window.sitehound = self;
+
+            if (window.mixpanel && window.mixpanel.persistence && document.cookie.indexOf(window.mixpanel.persistence.name + '=') > -1) {
+                // detected Mixpanel cookie - warn to switch to localstorage
+                error('Warning: Mixpanel cookie detected - update Mixpanel config to use localStorage.');
+            }
 
             // replay any ready() events queued up by the snippet before the lib was loaded
             replayReady();
@@ -325,13 +329,12 @@
                 return;
             }
             try {
-                var prefix = '[SiteHound] ';
                 if (typeof message === 'object') {
                     if (JSON && JSON.stringify) {
-                        message = prefix + JSON.stringify(message);
+                        message = CONSOLE_PREFIX + JSON.stringify(message);
                     }
                 } else {
-                    message = prefix + message;
+                    message = CONSOLE_PREFIX + message;
                 }
                 if (object && JSON && JSON.stringify) {
                     message = message + '(' + JSON.stringify(object).slice(1).slice(0,-1) + ')';
@@ -373,9 +376,7 @@
                 this.debug('onURLChange()');
                 urlChangeQueue.push(f);
             } else {
-                if (window.console && console.error) {
-                    console.error("[SiteHound] onURLChange() called with something that isn't a function");
-                }
+                error("onURLChange() called with something that isn't a function");
             }
         }
 
@@ -854,8 +855,11 @@
             document.cookie = 'sh_' + name + '=' + value + '; ' + expires + ';path=/' + (domain ? ';domain=' + domain : '');
         }
 
-        function getCookie(cname) {
-            var name = 'sh_' + cname + '=';
+        function getCookie(cname, prefix) {
+            if (prefix === undefined) {
+                prefix = 'sh_';
+            }
+            var name = prefix + cname + '=';
             var cs = document.cookie.split(';');
             for(var i=0; i < cs.length; i++) {
                 var c = cs[i];
@@ -1066,9 +1070,7 @@
             this.debug('ready(' + page + ')');
             f(page);
         } else {
-            if (window.console && console.error) {
-                console.error("[SiteHound] ready() called with something that isn't a function");
-            }
+            error("ready() called with something that isn't a function");
         }
     }
 
@@ -1116,9 +1118,7 @@
             message: error.message,
             'SiteHound library version': this.VERSION
         });
-        if (window.console && console.error) {
-            console.error('[SiteHound] ' + error.name + '; ' + error.message);
-        }
+        error(error.name + '; ' + error.message);
     }
 
     //
@@ -1157,20 +1157,27 @@
             try {
                 var result = new adaptors[adaptorClass];
             } catch (error) {
-                if (window.console && console.error) {
-                    console.error('[SiteHound] adaptor ' + adaptorClass + " could not be loaded");
-                    console.error('[SiteHound] ' + error.name + '; ' + error.message);
-                }
+                error('adaptor ' + adaptorClass + " could not be loaded");
+                error(error.name + '; ' + error.message);
                 return;
             }
         }
         if (!result.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
-            }
+            error('failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
             return;
         }
         return result;
+    }
+
+    function error(msg) {
+        if (!window.console) {
+            return;
+        }
+        if (console.error) {
+            console.error(CONSOLE_PREFIX + msg);
+        } else if (console.log) {
+            console.log(CONSOLE_PREFIX + '[ERROR] ' + msg);
+        }
     }
 
     //
@@ -1194,9 +1201,7 @@
         }
 
         if (!this.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] window.analytics is not initialized - ensure analytics.js snippet is included first');
-            }
+            error('window.analytics is not initialized - ensure analytics.js snippet is included first');
             return;
         }
 
