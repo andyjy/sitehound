@@ -676,44 +676,49 @@
                 }
             }
 
-            if (activeExperiments.length > 0) {
-                var oEsKey = 'Optimizely Experiments',
-                    oVsKey = 'Optimizely Variations';
-                var oEs = userTraits[oEsKey],
-                    oVs = userTraits[oVsKey];
-                self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
-                self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
-
-                for (var i = 0; i < activeExperiments.length; i++) {
-                    var experimentId = activeExperiments[i];
-                    var variationId = oState.variationIdsMap[experimentId][0].toString();
-                    var experimentTraits = {
-                        'Experiment ID': experimentId,
-                        'Experiment Name': oData.experiments[experimentId].name,
-                        'Experiment First View': !oEs || !oEs.indexOf || (oEs.indexOf(experimentId) === -1),
-                        'Variation ID': variationId,
-                        'Variation Name': oState.variationNamesMap[experimentId]
-                    };
-                    if (self.globalTraits[oEsKey].indexOf(experimentId) === -1) {
-                        self.globalTraits[oEsKey].push(experimentId);
-                    }
-                    var multiVariate = oSections[experimentId];
-                    if (multiVariate) {
-                        experimentTraits['Section Name'] = multiVariate.name;
-                        experimentTraits['Variation ID'] = multiVariate.variation_ids.join();
-                        for (var v = 0; v < multiVariate.variation_ids.length; v++) {
-                            if (self.globalTraits[oVsKey].indexOf(multiVariate.variation_ids[v]) === -1) {
-                                self.globalTraits[oVsKey].push(multiVariate.variation_ids[v]);
-                            }
-                        }
-                    } else {
-                        if (self.globalTraits[oVsKey].indexOf(variationId) === -1) {
-                            self.globalTraits[oVsKey].push(variationId);
-                        }
-                    }
-                    result.push(['Optimizely Experiment Viewed', experimentTraits]);
-                }
+            if (!activeExperiments.length) {
+                // return empty result
+                return result;
             }
+
+            var oEsKey = 'Optimizely Experiments',
+                oVsKey = 'Optimizely Variations';
+            var oEs = userTraits[oEsKey],
+                oVs = userTraits[oVsKey];
+            self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
+            self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
+
+            for (var i = 0; i < activeExperiments.length; i++) {
+                var experimentId = activeExperiments[i];
+                var variationId = oState.variationIdsMap[experimentId][0].toString();
+                var experimentTraits = {
+                    'Experiment ID': experimentId,
+                    'Experiment Name': oData.experiments[experimentId].name,
+                    'Experiment First View': !oEs || !oEs.indexOf || (oEs.indexOf(experimentId) === -1),
+                    'Variation ID': variationId,
+                    'Variation Name': oState.variationNamesMap[experimentId]
+                };
+                if (self.globalTraits[oEsKey].indexOf(experimentId) === -1) {
+                    self.globalTraits[oEsKey].push(experimentId);
+                }
+                var multiVariate = oSections[experimentId];
+                if (multiVariate) {
+                    experimentTraits['Section Name'] = multiVariate.name;
+                    experimentTraits['Variation ID'] = multiVariate.variation_ids.join();
+                    for (var v = 0; v < multiVariate.variation_ids.length; v++) {
+                        if (self.globalTraits[oVsKey].indexOf(multiVariate.variation_ids[v]) === -1) {
+                            self.globalTraits[oVsKey].push(multiVariate.variation_ids[v]);
+                        }
+                    }
+                } else {
+                    if (self.globalTraits[oVsKey].indexOf(variationId) === -1) {
+                        self.globalTraits[oVsKey].push(variationId);
+                    }
+                }
+                result.push(['Optimizely Experiment Viewed', experimentTraits]);
+            }
+            self.globalTraits[oEsKey].sort();
+            self.globalTraits[oVsKey].sort();
             return result;
         }
 
