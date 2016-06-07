@@ -847,20 +847,6 @@
             document.cookie = 'sh_' + name + '=' + value + '; ' + expires + ';path=/' + (domain ? ';domain=' + domain : '');
         }
 
-        function getCookie(cname, prefix) {
-            if (prefix === undefined) {
-                prefix = 'sh_';
-            }
-            var name = prefix + cname + '=';
-            var cs = document.cookie.split(';');
-            for(var i=0; i < cs.length; i++) {
-                var c = cs[i];
-                while (c.charAt(0)==' ') c = c.substring(1);
-                if (c.indexOf(name) == 0) return c.substring(name.length,c.length);
-            }
-            return '';
-        }
-
         function getUTMParams() {
             var utm_params = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' '),
                 kw = '',
@@ -1223,6 +1209,20 @@
         f();
     }
 
+    function getCookie(cname, prefix) {
+        if (prefix === undefined) {
+            prefix = 'sh_';
+        }
+        var name = prefix + cname + '=';
+        var cs = document.cookie.split(';');
+        for(var i=0; i < cs.length; i++) {
+            var c = cs[i];
+            while (c.charAt(0)==' ') c = c.substring(1);
+            if (c.indexOf(name) == 0) return c.substring(name.length,c.length);
+        }
+        return '';
+    }
+
     //
     // Adaptors
     //
@@ -1239,6 +1239,9 @@
 
         this.ready = function(f) {
             waitFor('analytics.ready', function() {
+                if ((window.sitehound && window.sitehound.logToConsole) || getCookie('logToConsole')) {
+                    log('window.analytics detected');
+                }
                 analytics.ready(f);
             });
         }
