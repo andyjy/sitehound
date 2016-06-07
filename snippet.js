@@ -49,7 +49,7 @@
             sitehound.sniffOnLoad = true;
         }
 
-        sitehound.SNIPPET_VERSION = '1.5';
+        sitehound.SNIPPET_VERSION = '2.0';
 
         sitehound.load = function(adaptor) {
             sitehound.adaptor = adaptor;
