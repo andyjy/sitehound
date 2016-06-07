@@ -46,6 +46,9 @@
         }
 
         // initialize SiteHound when our adaptor's target library is ready
+        if (!initialConfig.silent) {
+            log('Waiting for ' + adaptor.klass + ' to load..');
+        }
         adaptor.ready(function() {
             // grab our custom config and calls, if any
             var initialConfig = window.sitehound || [];
@@ -63,7 +66,7 @@
             urlChangeQueue = [];
 
         this.adaptor = adaptor;
-        if ((typeof adaptor !== 'object') || !adaptor.check()) {
+        if (typeof adaptor !== 'object') {
             error('adaptor not valid');
             return;
         }
@@ -148,7 +151,7 @@
 
         // final initialization steps
         function completeInit() {
-            self.info('Loaded (version ' + VERSION + ', adaptor:' + (self.adaptor ? self.adaptor.klass : 'undefined') + ')');
+            self.info('Loaded (version ' + VERSION + ', adaptor: ' + self.adaptor.klass + ')');
 
             self.cookieDomain = topDomain(location.hostname);
             self.debug('Cookie domain: ' + self.cookieDomain);
@@ -323,39 +326,14 @@
             if (self.silent) {
                 return;
             }
-            self.log(message, object);
+            log(message, object);
         }
 
         this.debug = function(message, object) {
             if (!self.logToConsole) {
                 return;
             }
-            self.log(message, object);
-        }
-
-        this.log = function(message, object) {
-            if (!window.console || !console.log) {
-                return;
-            }
-            try {
-                if (typeof message === 'object') {
-                    if (JSON && JSON.stringify) {
-                        message = CONSOLE_PREFIX + JSON.stringify(message);
-                    }
-                } else {
-                    message = CONSOLE_PREFIX + message;
-                }
-                if (object && JSON && JSON.stringify) {
-                    message = message + '(' + JSON.stringify(object).slice(1).slice(0,-1) + ')';
-                    object = null;
-                }
-                console.log(message);
-                if (object) {
-                    console.log(object);
-                }
-            } catch (error) {
-                self.trackError(error);
-            }
+            log(message, object);
         }
 
         this.doNotTrack = function(dnt) {
@@ -1013,10 +991,10 @@
         }
     }
 
-    SiteHound.prototype.alias = function(new) {
+    SiteHound.prototype.alias = function(new_alias) {
         if (this.deferUntilSniff('alias', arguments)) {return;}
-        this.debug('alias', [a]);
-        this.adaptor.alias(a);
+        this.debug('alias', [new_alias]);
+        this.adaptor.alias(new_alias);
     }
 
     SiteHound.prototype.track = function(event, traits) {
@@ -1171,7 +1149,7 @@
 
     function registerAdaptor(klass, adaptor) {
         adaptors[klass] = adaptor;
-        adaptor.klass = klass;
+        adaptor.prototype.klass = klass;
     }
 
     function getAdaptor(adaptor) {
@@ -1189,11 +1167,32 @@
                 return;
             }
         }
-        if (!result.check()) {
-            error('failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
+        return result;
+    }
+
+    function log(message, object) {
+        if (!window.console || !console.log) {
             return;
         }
-        return result;
+        try {
+            if (typeof message === 'object') {
+                if (JSON && JSON.stringify) {
+                    message = CONSOLE_PREFIX + JSON.stringify(message);
+                }
+            } else {
+                message = CONSOLE_PREFIX + message;
+            }
+            if (object && JSON && JSON.stringify) {
+                message = message + '(' + JSON.stringify(object).slice(1).slice(0,-1) + ')';
+                object = null;
+            }
+            console.log(message);
+            if (object) {
+                console.log(object);
+            }
+        } catch (error) {
+            error(error.name + '; ' + error.message);
+        }
     }
 
     function error(msg) {
@@ -1207,33 +1206,41 @@
         }
     }
 
+    function waitFor(key, f, object) {
+        var o = object || window;
+        // handle nested object references
+        var keys = key.split('.');
+        for (var i = 0; i < keys.length; i++) {
+            if (typeof o[keys[i]] === 'undefined') {
+                // not available yet
+                setTimeout(function() { waitFor(key, f, object) }, 50);
+                return;
+            }
+            // else - object.key is now available
+            o = o[keys[i]];
+        }
+        // execute f()
+        f();
+    }
+
     //
     // Adaptors
     //
 
     registerAdaptor('disabled', function() {
         // tracking disabled
-        this.check = this.ready = this.identify = this.track = this.trackLink = this.trackForm
+        this.ready = this.identify = this.track = this.trackLink = this.trackForm
             = this.page = this.alias = this.userId = this.userTraits
             = function() {}
     });
 
-
     registerAdaptor('segment', function() {
-        window.analytics = window.analytics || [];
         var self = this;
 
-        this.check = function() {
-            return typeof analytics.ready !== 'undefined';
-        }
-
-        if (!this.check()) {
-            error('window.analytics is not initialized - ensure analytics.js snippet is included first');
-            return;
-        }
-
         this.ready = function(f) {
-            analytics.ready(f);
+            waitFor('analytics.ready', function() {
+                analytics.ready(f);
+            });
         }
 
         this.identify = function(a, b) {
