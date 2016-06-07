@@ -17,9 +17,12 @@
         }
 
         var methods = [
+            'alias',
+            'debug',
             'doNotTrack',
             'identify',
             'identifyOnce',
+            'info',
             'ready',
             'track',
             'trackAndCount',
