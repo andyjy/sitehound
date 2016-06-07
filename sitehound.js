@@ -138,12 +138,10 @@
                 self[key] = config[key];
             }
 
-            if (initialConfig.length && initialConfig.pop) {
+            while (initialConfig.length && initialConfig.pop) {
                 // window.sitehound quacks like an array
-                for (var i = 0; i < b.length; i++) {
-                    // prepend each method call to the queue
-                    self.queue.unshift(initialConfig.pop());
-                }
+                // prepend each method call to the queue
+                self.queue.unshift(initialConfig.pop());
             }
 
             self.thisPageTraits['SiteHound library version'] = self.VERSION = VERSION;
@@ -970,8 +968,8 @@
             return;
         }
         var method = args.shift();
-        if (self[method]) {
-            self[method].apply(self, args);
+        if (this[method]) {
+            this[method].apply(this, args);
         } else {
             this.debug('Unrecognised method: ' + method);
         }
