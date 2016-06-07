@@ -16,8 +16,6 @@
             return;
         }
 
-        sitehound.queue = [];
-
         var methods = [
             'doNotTrack',
             'identify',

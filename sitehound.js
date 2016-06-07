@@ -980,7 +980,7 @@
 
     SiteHound.prototype.push = function(args) {
         if (!typeof args === 'object') {
-            this.debug('push() requires ([method, [args]]), received: ', args);
+            this.debug('push() requires ([method, arg <, arg..>]); received: ', args);
             return;
         }
         var method = args.shift();
