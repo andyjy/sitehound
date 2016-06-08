@@ -65,7 +65,12 @@
             currentURL,
             urlChangeQueue = [];
 
-        setAdaptor(adaptor);
+        if (initialConfig.adaptor && ((initialConfig.adaptor.klass || initialConfig.adaptor) !== adaptor.klass)) {
+            // adaptor has been changed since initial load
+            setAdaptor(getAdaptor(initialConfig.adaptor));
+        } else {
+            setAdaptor(adaptor);
+        }
         if (typeof this.adaptor !== 'object') {
             error('adaptor not valid');
             return;
