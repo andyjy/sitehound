@@ -529,13 +529,12 @@
                 self.thisPageTraits['Referrer Type'] = self.detectPage(referrerPath);
             }
 
-            self.isLandingPage = false;
             if (!sessionTimedOut) {
                 // is this a landing page hit? (i.e. first pageview in session)
                 if (pageViews > 1) {
+                    // not a landing page - nothing further to do here
                     return;
                 }
-                self.isLandingPage = true;
                 self.debug('Detected landing page');
             }
 
@@ -544,7 +543,12 @@
             self.globalTraits['Session Count'] = sessionCount;
             setCookie('sessionCount', sessionCount, 366);
             self.debug('Session count: ' + sessionCount);
-            self.trackSessionStart = true;
+
+            // at this point we're either a landing page hit or counting a new session due to timeout
+            // track Session Started event for identified users and session timeouts
+            // i.e. not anonymous landing pages, of which we typically expect many
+            // but already have the Landing Page event for.
+            self.trackSessionStart = sessionTimedOut || self.userId;
 
             if (sessionTimedOut) {
                 // we don't update attribution tracking when tracking a new session due to inactivity
