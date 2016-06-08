@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.66 - 6th June 2016
+//  @version       0.9.66 - 7th June 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -157,7 +157,6 @@
             if (getCookie('dnt')) {
                 self.info('Do-not-track cookie present - disabling.');
                 self.adaptor = 'disabled';
-                return;
             }
 
             // debug mode?
@@ -192,12 +191,10 @@
                 if (ignoreHost(location.hostname)) {
                     self.info('Ignoring host: ' + location.hostname);
                     self.adaptor = 'disabled';
-                    return;
                 }
                 if (getCookie('dnt')) {
                     self.info('Do-not-track cookie present - disabling.');
                     self.adaptor = 'disabled';
-                    return;
                 }
 
                 var firstSniff = !self.sniffed;
@@ -229,8 +226,8 @@
                         1000
                     );
                 }
-            } catch(error) {
-                this.trackError(error);
+            } catch (e) {
+                this.trackError(e);
             }
         }
 
@@ -1073,8 +1070,13 @@
         this.debug('load() called when already loaded');
         if (adaptor) {
             this.adaptor = getAdaptor(adaptor);
-            this.info('Updated adaptor to: ' + adaptor.klass);
+            this.info('Updated adaptor to: ' + this.adaptor.klass);
         }
+    }
+
+    SiteHound.prototype.disable = function() {
+        this.adaptor = getAdaptor('disabled');
+        this.info('Disabled tracking');
     }
 
     //
@@ -1101,13 +1103,13 @@
         this.debug('[' + level + '] ' + message);
     }
 
-    SiteHound.prototype.trackError = function(error) {
+    SiteHound.prototype.trackError = function(e) {
         this.adaptor.track('Tracking Error', {
-            name: error.name,
-            message: error.message,
+            name: e.name,
+            message: e.message,
             'SiteHound library version': this.VERSION
         });
-        error(error.name + '; ' + error.message);
+        error(e.name + '; ' + e.message);
     }
 
     //
@@ -1145,9 +1147,9 @@
             adaptorClass = ((adaptor || 'segment').toLowerCase()) || 'segment';
             try {
                 var result = new adaptors[adaptorClass];
-            } catch (error) {
+            } catch (e) {
                 error('adaptor ' + adaptorClass + " could not be loaded");
-                error(error.name + '; ' + error.message);
+                error(e.name + '; ' + e.message);
                 return;
             }
         }
@@ -1174,8 +1176,8 @@
             if (object) {
                 console.log(object);
             }
-        } catch (error) {
-            error(error.name + '; ' + error.message);
+        } catch (e) {
+            error(e.name + '; ' + e.message);
         }
     }
 
@@ -1226,10 +1228,13 @@
     //
 
     registerAdaptor('disabled', function() {
+        this.ready = function(f) {
+            f();
+        }
         // tracking disabled
-        this.ready = this.identify = this.track = this.trackLink = this.trackForm
-            = this.page = this.alias = this.userId = this.userTraits
-            = function() {}
+        this.identify = this.track = this.trackLink = this.trackForm
+            = this.page = this.alias = this.userId = function() {}
+        this.userTraits = function() { return {}; }
     });
 
     registerAdaptor('segment', function() {
@@ -1276,7 +1281,7 @@
         this.userTraits = function() {
             var user = analytics.user();
             var traits = user.traits();
-            return traits;
+            return traits || {};
         }
     });
 

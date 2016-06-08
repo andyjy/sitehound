@@ -19,6 +19,7 @@
         var methods = [
             'alias',
             'debug',
+            'disable',
             'doNotTrack',
             'identify',
             'identifyOnce',
@@ -52,7 +53,7 @@
             sitehound.sniffOnLoad = true;
         }
 
-        sitehound.SNIPPET_VERSION = '2.0';
+        sitehound.SNIPPET_VERSION = '2.1';
 
         sitehound.load = function(adaptor) {
             sitehound.adaptor = adaptor;
