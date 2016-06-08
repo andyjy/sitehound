@@ -735,10 +735,6 @@
                     self.debug('Current userId: ' + currentUserId);
                 }
                 self.debug('adaptor.identify(' + self.userId + ', [traits])');
-                if (self.userId !== currentUserId) {
-                    // TOCHECK - set time of email verification as the user creation time
-                    traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
-                }
                 self.adaptor.identify(self.userId, traits);
                 if (self.userId !== currentUserId) {
                     self.debug('userId != currentUserId - Login');
