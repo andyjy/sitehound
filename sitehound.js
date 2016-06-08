@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.65 - 26th May 2016
+//  @version       0.9.66 - 7th June 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,14 +29,15 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.65";
+    var VERSION = "0.9.66",
+        CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
 
     // kickoff
     function init() {
-        var initialConfig = window.sitehound || {};
+        var initialConfig = window.sitehound = window.sitehound || [];
 
         var adaptor = getAdaptor(initialConfig.adaptor);
         if (!adaptor) {
@@ -45,9 +46,12 @@
         }
 
         // initialize SiteHound when our adaptor's target library is ready
+        if (!initialConfig.silent) {
+            log('Waiting for the ' + adaptor.klass + ' adaptor to load..');
+        }
         adaptor.ready(function() {
             // grab our custom config and calls, if any
-            var initialConfig = window.sitehound || {};
+            var initialConfig = window.sitehound || [];
             // initialize SiteHound library, passing in our custom config
             var sitehound = new SiteHound(initialConfig, adaptor);
         });
@@ -61,11 +65,14 @@
             currentURL,
             urlChangeQueue = [];
 
-        this.adaptor = adaptor;
-        if ((typeof adaptor !== 'object') || !adaptor.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] adaptor not valid');
-            }
+        if (initialConfig.adaptor && ((initialConfig.adaptor.klass || initialConfig.adaptor) !== adaptor.klass)) {
+            // adaptor has been changed since initial load
+            setAdaptor(getAdaptor(initialConfig.adaptor));
+        } else {
+            setAdaptor(adaptor);
+        }
+        if (typeof this.adaptor !== 'object') {
+            error('adaptor not valid');
             return;
         }
 
@@ -128,6 +135,7 @@
 
             self.sniffed = false;
 
+            // process array-style queue
             for (var key in config) {
                 if (initialConfig[key] !== undefined) {
                     config[key] = initialConfig[key];
@@ -135,20 +143,25 @@
                 self[key] = config[key];
             }
 
+            while (initialConfig.length && initialConfig.pop) {
+                // window.sitehound quacks like an array
+                // prepend each method call to the queue
+                self.queue.unshift(initialConfig.pop());
+            }
+
             self.thisPageTraits['SiteHound library version'] = self.VERSION = VERSION;
         }();
 
         // final initialization steps
         function completeInit() {
-            self.info('Library loaded (version ' + VERSION + ')');
+            self.info('Loaded (version ' + VERSION + ', adaptor: ' + self.adaptor.klass + ')');
 
             self.cookieDomain = topDomain(location.hostname);
             self.debug('Cookie domain: ' + self.cookieDomain);
 
             if (getCookie('dnt')) {
-                self.info('Do-not-track cookie present');
+                self.info('Do-not-track cookie present - disabling.');
                 self.adaptor = 'disabled';
-                return;
             }
 
             // debug mode?
@@ -158,6 +171,11 @@
 
             // replace the global sitehound var with our instance
             window.sitehound = self;
+
+            if (window.mixpanel && window.mixpanel.persistence && document.cookie.indexOf(window.mixpanel.persistence.name + '=') > -1) {
+                // detected Mixpanel cookie - warn to switch to localstorage
+                error('Warning: Mixpanel cookie detected - update Mixpanel config to use localStorage.');
+            }
 
             // replay any ready() events queued up by the snippet before the lib was loaded
             replayReady();
@@ -173,17 +191,15 @@
 
         this.sniff = this.done = function() { // done(): legacy name
             try {
-                self.debug('Sniffing..');
+                self.info('sniff()');
                 // check we want to track this host
                 if (ignoreHost(location.hostname)) {
                     self.info('Ignoring host: ' + location.hostname);
                     self.adaptor = 'disabled';
-                    return;
                 }
                 if (getCookie('dnt')) {
-                    self.info('do-not-track cookie present');
+                    self.info('Do-not-track cookie present - disabling.');
                     self.adaptor = 'disabled';
-                    return;
                 }
 
                 var firstSniff = !self.sniffed;
@@ -215,8 +231,8 @@
                         1000
                     );
                 }
-            } catch(error) {
-                this.trackError(error);
+            } catch (e) {
+                this.trackError(e);
             }
         }
 
@@ -231,6 +247,25 @@
             self.queue.push(args);
             self.debug('(Deferring ' + method + '() until sniff)');
             return true;
+        }
+
+        this.identify = function(a, b) {
+            self.debug('identify', [a, b]);
+            if (typeof b === 'object') {
+                // (id, traits)
+                self.userId = a;
+                self.globalTraits = mergeObjects(self.globalTraits, b);
+            } else if (typeof a === 'object') {
+                // (traits)
+                self.globalTraits = mergeObjects(self.globalTraits, a);
+            } else {
+                // (id)
+                self.userId = a;
+            }
+            if (self.sniffed) {
+                // already sniffed - call adaptor.identify()
+                doIdentify();
+            } // else - adaptor.identify() will be called when we sniff()
         }
 
         // like analytics.identify({..}), but only set traits if they're not already set
@@ -291,40 +326,14 @@
             if (self.silent) {
                 return;
             }
-            self.log(message, object);
+            log(message, object);
         }
 
         this.debug = function(message, object) {
             if (!self.logToConsole) {
                 return;
             }
-            self.log(message, object);
-        }
-
-        this.log = function(message, object) {
-            if (!window.console || !console.log) {
-                return;
-            }
-            try {
-                var prefix = '[SiteHound] ';
-                if (typeof message === 'object') {
-                    if (JSON && JSON.stringify) {
-                        message = prefix + JSON.stringify(message);
-                    }
-                } else {
-                    message = prefix + message;
-                }
-                if (object && JSON && JSON.stringify) {
-                    message = message + '(' + JSON.stringify(object).slice(1).slice(0,-1) + ')';
-                    object = null;
-                }
-                console.log(message);
-                if (object) {
-                    console.log(object);
-                }
-            } catch (error) {
-                self.trackError(error);
-            }
+            log(message, object);
         }
 
         this.doNotTrack = function(dnt) {
@@ -354,10 +363,21 @@
                 this.debug('onURLChange()');
                 urlChangeQueue.push(f);
             } else {
-                if (window.console && console.error) {
-                    console.error("[SiteHound] onURLChange() called with something that isn't a function");
-                }
+                error("onURLChange() called with something that isn't a function");
             }
+        }
+
+        this.load = function(adaptor) {
+            self.debug('load() called when already loaded');
+            if (adaptor) {
+                setAdaptor(getAdaptor(adaptor));
+                self.info('Updated adaptor to: ' + self.adaptor.klass);
+            }
+        }
+
+        this.disable = function() {
+            setAdaptor(getAdaptor('disabled'));
+            self.info('Disabled tracking');
         }
 
         //
@@ -428,76 +448,8 @@
                 self.thisPageTraits['referrer'] = self.thisPageTraits['Referrer'] = self.thisPageTraits['$referrer'] = self.overrideReferrer;
             }
 
-            //
-            // identify(), including user tracking as relevnt
-            //
-            if (self.userId) {
-                // we have a logged-in user
-                self.debug('Received userId: ' + self.userId);
-                var userTraits = {},
-                    specialKeys = [
-                        'name',
-                        'email',
-                        'createdAt'
-                    ];
-                for (var key in self.userTraits) {
-                    // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
-                    // get the traits from the adaptor?
-                    var keyLower = key.toLowerCase(),
-                        newKey = '';
-                    for (var i = 0; i < specialKeys.length; i++) {
-                        if (keyLower === specialKeys[i].toLowerCase()) {
-                            newKey = specialKeys[i];
-                            break;
-                        }
-                    }
-                    if (!newKey) {
-                        newKey = 'User ' + titleCase(key);
-                    }
-                    userTraits[newKey] = self.userTraits[key];
-                }
-                var traits = mergeObjects(self.globalTraits, userTraits);
-                var currentUserId;
-                if (!self.adaptor.userId()) {
-                    // session up to here has been anonymous
-                    self.debug('Anonymous session until now - alias()');
-                    self.adaptor.alias(self.userId);
-                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
-                    self.adaptor.identify('x');
-                } else {
-                    currentUserId = self.adaptor.userId();
-                    self.debug('Current userId: ' + currentUserId);
-                }
-                self.debug('identify(' + self.userId + ', [traits])');
-                if (self.userId !== currentUserId) {
-                    // TOCHECK - set time of email verification as the user creation time
-                    traits = mergeObjects(traits, ignoreExistingTraits({createdAt: new Date().toISOString()}));
-                }
-                self.adaptor.identify(self.userId, traits);
-                if (self.userId !== currentUserId) {
-                    self.debug('userId != currentUserId - Login');
-                    self.track('Login');
-                }
-                setCookie('logged_out', '', -100);
-            } else {
-                // no information about whether the user is currently logged in
-                self.adaptor.identify(self.globalTraits);
-                // by default, automatically detect logout if the userId property has been set
-                //  - even if it's been set to null
-                self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
-                if (self.detectLogout) {
-                    self.debug('Detecting potential logout..');
-                    if (self.adaptor.userId()) {
-                        // we were logged in earlier in the session
-                        // track only once until next login
-                        if (!getCookie('logged_out')) {
-                            self.track('Logout');
-                            setCookie('logged_out', true);
-                            self.debug('Logout');
-                        }
-                    }
-                }
-            }
+            // handle user identification, including login/logout
+            doIdentify();
 
             // track landing page event?
             if (self.trackLandingPage) {
@@ -539,18 +491,18 @@
             // session start + last updated time
             var sessionStarted = getCookie('sessionStarted') || new Date().toISOString(),
                 sessionUpdated = getCookie('sessionUpdated') || new Date().toISOString();
-            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60),
-                sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
-            self.globalTraits['Session Started'] = sessionStarted;
-            self.globalTraits['Minutes Since Session Start'] = sessionDuration;
+            var sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
             self.debug('Session started: ' + sessionStarted);
-            self.debug('Session duration: ' + sessionDuration);
             self.debug('Minutes since last event: ' + sessionSilent);
             var sessionTimedOut = sessionSilent > self.sessionTimeout;
             if (sessionTimedOut) {
                 self.debug('Session timed out - tracking as new session');
                 sessionStarted = new Date().toISOString();
             }
+            var sessionDuration = Math.floor((new Date() - new Date(sessionStarted))/1000/60);
+            self.debug('Session duration: ' + sessionDuration);
+            self.globalTraits['Session Started'] = sessionStarted;
+            self.globalTraits['Minutes Since Session Start'] = sessionDuration;
             setCookie('sessionStarted', sessionStarted);
             setCookie('sessionUpdated', new Date().toISOString());
 
@@ -715,45 +667,114 @@
                 }
             }
 
-            if (activeExperiments.length > 0) {
-                var oEsKey = 'Optimizely Experiments',
-                    oVsKey = 'Optimizely Variations';
-                var oEs = userTraits[oEsKey],
-                    oVs = userTraits[oVsKey];
-                self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
-                self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
+            if (!activeExperiments.length) {
+                // return empty result
+                return result;
+            }
 
-                for (var i = 0; i < activeExperiments.length; i++) {
-                    var experimentId = activeExperiments[i];
-                    var variationId = oState.variationIdsMap[experimentId][0].toString();
-                    var experimentTraits = {
-                        'Experiment ID': experimentId,
-                        'Experiment Name': oData.experiments[experimentId].name,
-                        'Experiment First View': !oEs || !oEs.indexOf || (oEs.indexOf(experimentId) === -1),
-                        'Variation ID': variationId,
-                        'Variation Name': oState.variationNamesMap[experimentId]
-                    };
-                    if (self.globalTraits[oEsKey].indexOf(experimentId) === -1) {
-                        self.globalTraits[oEsKey].push(experimentId);
-                    }
-                    var multiVariate = oSections[experimentId];
-                    if (multiVariate) {
-                        experimentTraits['Section Name'] = multiVariate.name;
-                        experimentTraits['Variation ID'] = multiVariate.variation_ids.join();
-                        for (var v = 0; v < multiVariate.variation_ids.length; v++) {
-                            if (self.globalTraits[oVsKey].indexOf(multiVariate.variation_ids[v]) === -1) {
-                                self.globalTraits[oVsKey].push(multiVariate.variation_ids[v]);
-                            }
+            var oEsKey = 'Optimizely Experiments',
+                oVsKey = 'Optimizely Variations';
+            var oEs = userTraits[oEsKey],
+                oVs = userTraits[oVsKey];
+            self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
+            self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
+
+            for (var i = 0; i < activeExperiments.length; i++) {
+                var experimentId = activeExperiments[i];
+                var variationId = oState.variationIdsMap[experimentId][0].toString();
+                var experimentTraits = {
+                    'Experiment ID': experimentId,
+                    'Experiment Name': oData.experiments[experimentId].name,
+                    'Experiment First View': !oEs || !oEs.indexOf || (oEs.indexOf(experimentId) === -1),
+                    'Variation ID': variationId,
+                    'Variation Name': oState.variationNamesMap[experimentId]
+                };
+                if (self.globalTraits[oEsKey].indexOf(experimentId) === -1) {
+                    self.globalTraits[oEsKey].push(experimentId);
+                }
+                var multiVariate = oSections[experimentId];
+                if (multiVariate) {
+                    experimentTraits['Section Name'] = multiVariate.name;
+                    experimentTraits['Variation ID'] = multiVariate.variation_ids.join();
+                    for (var v = 0; v < multiVariate.variation_ids.length; v++) {
+                        if (self.globalTraits[oVsKey].indexOf(multiVariate.variation_ids[v]) === -1) {
+                            self.globalTraits[oVsKey].push(multiVariate.variation_ids[v]);
                         }
-                    } else {
-                        if (self.globalTraits[oVsKey].indexOf(variationId) === -1) {
-                            self.globalTraits[oVsKey].push(variationId);
+                    }
+                } else {
+                    if (self.globalTraits[oVsKey].indexOf(variationId) === -1) {
+                        self.globalTraits[oVsKey].push(variationId);
+                    }
+                }
+                result.push(['Optimizely Experiment Viewed', experimentTraits]);
+            }
+            self.globalTraits[oEsKey].sort();
+            self.globalTraits[oVsKey].sort();
+            return result;
+        }
+
+        // handle user identification, including login/logout
+        function doIdentify() {
+            if (self.userId) {
+                // we have a logged-in user
+                self.debug('doIdentify(): received userId: ' + self.userId);
+                var userTraits = {},
+                    specialKeys = [
+                        'name',
+                        'email',
+                        'createdAt'
+                    ];
+                for (var key in self.userTraits) {
+                    // TODO: support for all segment/mixpanel special traits, and camel/snake case a la segment
+                    // get the traits from the adaptor?
+                    var keyLower = key.toLowerCase(),
+                        newKey = '';
+                    for (var i = 0; i < specialKeys.length; i++) {
+                        if (keyLower === specialKeys[i].toLowerCase()) {
+                            newKey = specialKeys[i];
+                            break;
                         }
                     }
-                    result.push(['Optimizely Experiment Viewed', experimentTraits]);
+                    if (!newKey) {
+                        newKey = 'User ' + titleCase(key);
+                    }
+                    userTraits[newKey] = self.userTraits[key];
+                }
+                var traits = mergeObjects(self.globalTraits, userTraits);
+                var currentUserId;
+                if (!self.adaptor.userId()) {
+                    // session up to here has been anonymous
+                    self.debug('Anonymous session until now - alias()');
+                    self.adaptor.alias(self.userId);
+                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
+                    self.adaptor.identify('x');
+                } else {
+                    currentUserId = self.adaptor.userId();
+                    self.debug('Current userId: ' + currentUserId);
+                }
+                self.debug('adaptor.identify(' + self.userId + ', [traits])');
+                self.adaptor.identify(self.userId, traits);
+                if (self.userId !== currentUserId) {
+                    self.debug('userId != currentUserId - Login');
+                    self.track('Login');
+                }
+                setCookie('logged_out', '', -100);
+            } else {
+                // no information about whether the user is currently logged in
+                self.adaptor.identify(self.globalTraits);
+                // by default, automatically detect logout if the userId property has been set
+                //  - even if it's been set to null
+                self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
+                if (self.detectLogout && !getCookie('logged_out')) {
+                    self.debug('doIdentify(): detecting potential logout..');
+                    if (self.adaptor.userId()) {
+                        // we were logged in earlier in the session
+                        self.track('Logout');
+                        setCookie('logged_out', true);
+                        self.debug('Logout');
+                    }
                 }
             }
-            return result;
         }
 
         function trackPage(one, two, three) {
@@ -835,17 +856,6 @@
             document.cookie = 'sh_' + name + '=' + value + '; ' + expires + ';path=/' + (domain ? ';domain=' + domain : '');
         }
 
-        function getCookie(cname) {
-            var name = 'sh_' + cname + '=';
-            var cs = document.cookie.split(';');
-            for(var i=0; i < cs.length; i++) {
-                var c = cs[i];
-                while (c.charAt(0)==' ') c = c.substring(1);
-                if (c.indexOf(name) == 0) return c.substring(name.length,c.length);
-            }
-            return '';
-        }
-
         function getUTMParams() {
             var utm_params = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' '),
                 kw = '',
@@ -885,6 +895,11 @@
                 }
             }
             return newParams;
+        }
+
+        function setAdaptor(adaptor) {
+            self.adaptor = adaptor;
+            CONSOLE_PREFIX = '[SiteHound' + (adaptor && adaptor.klass ? ':' + adaptor.klass : '') + '] ';
         }
 
         // Modified from https://github.com/segmentio/top-domain v2.0.1
@@ -963,10 +978,23 @@
     // public methods
     //
 
-    SiteHound.prototype.identify = function(a, b) {
-        if (this.deferUntilSniff('identify', arguments)) {return;}
-        this.debug('identify', [a, b]);
-        this.adaptor.identify(a, b);
+    SiteHound.prototype.push = function(args) {
+        if (!typeof args === 'object') {
+            this.debug('push() requires ([method, arg <, arg..>]); received: ', args);
+            return;
+        }
+        var method = args.shift();
+        if (this[method]) {
+            this[method].apply(this, args);
+        } else {
+            this.debug('Unrecognised method: ' + method);
+        }
+    }
+
+    SiteHound.prototype.alias = function(new_alias) {
+        if (this.deferUntilSniff('alias', arguments)) {return;}
+        this.debug('alias', [new_alias]);
+        this.adaptor.alias(new_alias);
     }
 
     SiteHound.prototype.track = function(event, traits) {
@@ -1047,9 +1075,7 @@
             this.debug('ready(' + page + ')');
             f(page);
         } else {
-            if (window.console && console.error) {
-                console.error("[SiteHound] ready() called with something that isn't a function");
-            }
+            error("ready() called with something that isn't a function");
         }
     }
 
@@ -1057,14 +1083,6 @@
         result = mergeObjects(this.adaptor.userTraits(), this.userTraits);
         this.debug('getUserTraits() returned ', result);
         return result;
-    }
-
-    SiteHound.prototype.load = function(adaptor) {
-        this.debug('load() called when already loaded');
-        if (adaptor) {
-            this.debug('updating adaptor to: ' + adaptor);
-            this.adaptor = getAdaptor(adaptor);
-        }
     }
 
     //
@@ -1091,15 +1109,13 @@
         this.debug('[' + level + '] ' + message);
     }
 
-    SiteHound.prototype.trackError = function(error) {
+    SiteHound.prototype.trackError = function(e) {
         this.adaptor.track('Tracking Error', {
-            name: error.name,
-            message: error.message,
+            name: e.name,
+            message: e.message,
             'SiteHound library version': this.VERSION
         });
-        if (window.console && console.error) {
-            console.error('[SiteHound] ' + error.name + '; ' + error.message);
-        }
+        error(e.name + '; ' + e.message);
     }
 
     //
@@ -1125,6 +1141,7 @@
 
     function registerAdaptor(klass, adaptor) {
         adaptors[klass] = adaptor;
+        adaptor.prototype.klass = klass;
     }
 
     function getAdaptor(adaptor) {
@@ -1136,21 +1153,80 @@
             adaptorClass = ((adaptor || 'segment').toLowerCase()) || 'segment';
             try {
                 var result = new adaptors[adaptorClass];
-            } catch (error) {
-                if (window.console && console.error) {
-                    console.error('[SiteHound] adaptor ' + adaptorClass + " could not be loaded");
-                    console.error('[SiteHound] ' + error.name + '; ' + error.message);
-                }
+            } catch (e) {
+                error('adaptor ' + adaptorClass + " could not be loaded");
+                error(e.name + '; ' + e.message);
                 return;
             }
         }
-        if (!result.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] failed to attach to ' + (adaptorClass ? adaptorClass : 'adaptor'));
-            }
+        return result;
+    }
+
+    function log(message, object) {
+        if (!window.console || !console.log) {
             return;
         }
-        return result;
+        try {
+            if (typeof message === 'object') {
+                if (JSON && JSON.stringify) {
+                    message = CONSOLE_PREFIX + JSON.stringify(message);
+                }
+            } else {
+                message = CONSOLE_PREFIX + message;
+            }
+            if (object && JSON && JSON.stringify) {
+                message = message + '(' + JSON.stringify(object).slice(1).slice(0,-1) + ')';
+                object = null;
+            }
+            console.log(message);
+            if (object) {
+                console.log(object);
+            }
+        } catch (e) {
+            error(e.name + '; ' + e.message);
+        }
+    }
+
+    function error(msg) {
+        if (!window.console) {
+            return;
+        }
+        if (console.error) {
+            console.error(CONSOLE_PREFIX + msg);
+        } else if (console.log) {
+            console.log(CONSOLE_PREFIX + '[ERROR] ' + msg);
+        }
+    }
+
+    function waitFor(key, f, object) {
+        var o = object || window;
+        // handle nested object references
+        var keys = key.split('.');
+        for (var i = 0; i < keys.length; i++) {
+            if (typeof o[keys[i]] === 'undefined') {
+                // not available yet
+                setTimeout(function() { waitFor(key, f, object) }, 50);
+                return;
+            }
+            // else - object.key is now available
+            o = o[keys[i]];
+        }
+        // execute f()
+        f();
+    }
+
+    function getCookie(cname, prefix) {
+        if (prefix === undefined) {
+            prefix = 'sh_';
+        }
+        var name = prefix + cname + '=';
+        var cs = document.cookie.split(';');
+        for(var i=0; i < cs.length; i++) {
+            var c = cs[i];
+            while (c.charAt(0)==' ') c = c.substring(1);
+            if (c.indexOf(name) == 0) return c.substring(name.length,c.length);
+        }
+        return '';
     }
 
     //
@@ -1158,30 +1234,25 @@
     //
 
     registerAdaptor('disabled', function() {
+        this.ready = function(f) {
+            f();
+        }
         // tracking disabled
-        this.check = this.ready = this.identify = this.track = this.trackLink = this.trackForm
-            = this.page = this.alias = this.userId = this.userTraits
-            = function() {}
+        this.identify = this.track = this.trackLink = this.trackForm
+            = this.page = this.alias = this.userId = function() {}
+        this.userTraits = function() { return {}; }
     });
 
-
     registerAdaptor('segment', function() {
-        window.analytics = window.analytics || [];
         var self = this;
 
-        this.check = function() {
-            return typeof analytics.ready !== 'undefined';
-        }
-
-        if (!this.check()) {
-            if (window.console && console.error) {
-                console.error('[SiteHound] window.analytics is not initialized - ensure analytics.js snippet is included first');
-            }
-            return;
-        }
-
         this.ready = function(f) {
-            analytics.ready(f);
+            waitFor('analytics.ready', function() {
+                if ((window.sitehound && window.sitehound.logToConsole) || getCookie('logToConsole')) {
+                    log('window.analytics detected');
+                }
+                analytics.ready(f);
+            });
         }
 
         this.identify = function(a, b) {
@@ -1216,7 +1287,7 @@
         this.userTraits = function() {
             var user = analytics.user();
             var traits = user.traits();
-            return traits;
+            return traits || {};
         }
     });
 

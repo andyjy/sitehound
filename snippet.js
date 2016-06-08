@@ -1,5 +1,5 @@
 !function() {
-    var sitehound = window.sitehound = window.sitehound || {};
+    var sitehound = window.sitehound = window.sitehound || [];
 
     var SCRIPT_URL = ('https:' === document.location.protocol ? 'https://' : 'http://')
         + 'andyyoung.github.io/sitehound/sitehound-min.js';
@@ -16,12 +16,13 @@
             return;
         }
 
-        sitehound.queue = [];
-
         var methods = [
+            'alias',
+            'debug',
             'doNotTrack',
             'identify',
             'identifyOnce',
+            'info',
             'ready',
             'track',
             'trackAndCount',
@@ -37,7 +38,7 @@
             return function() {
                 var args = Array.prototype.slice.call(arguments);
                 args.unshift(method);
-                sitehound.queue.push(args);
+                sitehound.push(args);
                 return sitehound;
             };
         };
@@ -51,7 +52,7 @@
             sitehound.sniffOnLoad = true;
         }
 
-        sitehound.SNIPPET_VERSION = '1.4';
+        sitehound.SNIPPET_VERSION = '2.1';
 
         sitehound.load = function(adaptor) {
             sitehound.adaptor = adaptor;
@@ -62,6 +63,10 @@
             script.src = SCRIPT_URL + '?snippet_ver=' + sitehound.SNIPPET_VERSION;
             var first = document.getElementsByTagName('script')[0];
             first.parentNode.insertBefore(script, first);
+        }
+
+        sitehound.disable = function() {
+            sitehound.adaptor = 'disabled';
         }
     }
 }();
