@@ -47,7 +47,7 @@
 
         // initialize SiteHound when our adaptor's target library is ready
         if (!initialConfig.silent) {
-            log('Waiting for ' + adaptor.klass + ' to load..');
+            log('Waiting for the ' + adaptor.klass + ' adaptor to load..');
         }
         adaptor.ready(function() {
             // grab our custom config and calls, if any
@@ -65,8 +65,8 @@
             currentURL,
             urlChangeQueue = [];
 
-        this.adaptor = adaptor;
-        if (typeof adaptor !== 'object') {
+        setAdaptor(adaptor);
+        if (typeof this.adaptor !== 'object') {
             error('adaptor not valid');
             return;
         }
@@ -360,6 +360,19 @@
             } else {
                 error("onURLChange() called with something that isn't a function");
             }
+        }
+
+        this.load = function(adaptor) {
+            self.debug('load() called when already loaded');
+            if (adaptor) {
+                setAdaptor(getAdaptor(adaptor));
+                self.info('Updated adaptor to: ' + self.adaptor.klass);
+            }
+        }
+
+        this.disable = function() {
+            setAdaptor(getAdaptor('disabled'));
+            self.info('Disabled tracking');
         }
 
         //
@@ -879,6 +892,11 @@
             return newParams;
         }
 
+        function setAdaptor(adaptor) {
+            self.adaptor = adaptor;
+            CONSOLE_PREFIX = '[SiteHound' + (adaptor && adaptor.klass ? ':' + adaptor.klass : '') + '] ';
+        }
+
         // Modified from https://github.com/segmentio/top-domain v2.0.1
         // @TODO: learn how to javascript good
         /**
@@ -1060,19 +1078,6 @@
         result = mergeObjects(this.adaptor.userTraits(), this.userTraits);
         this.debug('getUserTraits() returned ', result);
         return result;
-    }
-
-    SiteHound.prototype.load = function(adaptor) {
-        this.debug('load() called when already loaded');
-        if (adaptor) {
-            this.adaptor = getAdaptor(adaptor);
-            this.info('Updated adaptor to: ' + this.adaptor.klass);
-        }
-    }
-
-    SiteHound.prototype.disable = function() {
-        this.adaptor = getAdaptor('disabled');
-        this.info('Disabled tracking');
     }
 
     //
