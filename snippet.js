@@ -19,7 +19,6 @@
         var methods = [
             'alias',
             'debug',
-            'disable',
             'doNotTrack',
             'identify',
             'identifyOnce',
@@ -64,6 +63,10 @@
             script.src = SCRIPT_URL + '?snippet_ver=' + sitehound.SNIPPET_VERSION;
             var first = document.getElementsByTagName('script')[0];
             first.parentNode.insertBefore(script, first);
+        }
+
+        sitehound.disable = function() {
+            sitehound.adaptor = 'disabled';
         }
     }
 }();
