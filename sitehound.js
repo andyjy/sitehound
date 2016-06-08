@@ -683,8 +683,8 @@
                 oVsKey = 'Optimizely Variations';
             var oEs = userTraits[oEsKey],
                 oVs = userTraits[oVsKey];
-            self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
-            self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
+            self.globalTraits[oEsKey] = oEs ? (typeof oEs.sort === 'function' ? oEs : [oEs]) : [];
+            self.globalTraits[oVsKey] = oVs ? (typeof oVs.sort === 'function' ? oVs : [oVs]) : [];
 
             for (var i = 0; i < activeExperiments.length; i++) {
                 var experimentId = activeExperiments[i];
