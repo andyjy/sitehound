@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.66 - 7th June 2016
+//  @version       0.9.67 - 8th June 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.66",
+    var VERSION = "0.9.67",
         CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
@@ -451,6 +451,12 @@
             // handle user identification, including login/logout
             doIdentify();
 
+            // track session started event?
+            if (self.trackSessionStart) {
+                self.track('Session Started');
+                // only do this once
+                self.trackSessionStart = false;
+            }
             // track landing page event?
             if (self.trackLandingPage) {
                 trackPage('Landing', self.landingPageTraits);
@@ -538,6 +544,7 @@
             self.globalTraits['Session Count'] = sessionCount;
             setCookie('sessionCount', sessionCount, 366);
             self.debug('Session count: ' + sessionCount);
+            self.trackSessionStart = true;
 
             if (sessionTimedOut) {
                 // we don't update attribution tracking when tracking a new session due to inactivity
