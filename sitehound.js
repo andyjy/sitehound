@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.66 - 7th June 2016
+//  @version       0.9.68 - 9th June 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.66",
+    var VERSION = "0.9.68",
         CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
@@ -177,8 +177,8 @@
                 error('Warning: Mixpanel cookie detected - update Mixpanel config to use localStorage.');
             }
 
-            // replay any ready() events queued up by the snippet before the lib was loaded
-            replayReady();
+            // replay any ready()/identify() events queued up by the snippet before the lib was loaded
+            replayPreSniff();
 
             if (initialConfig.sniffOnLoad || initialConfig.isDone) { // isDone: legacy
                 self.sniff();
@@ -451,6 +451,12 @@
             // handle user identification, including login/logout
             doIdentify();
 
+            // track session started event?
+            if (self.trackSessionStart) {
+                self.track('Session Started');
+                // only do this once
+                self.trackSessionStart = false;
+            }
             // track landing page event?
             if (self.trackLandingPage) {
                 trackPage('Landing', self.landingPageTraits);
@@ -523,13 +529,12 @@
                 self.thisPageTraits['Referrer Type'] = self.detectPage(referrerPath);
             }
 
-            self.isLandingPage = false;
             if (!sessionTimedOut) {
                 // is this a landing page hit? (i.e. first pageview in session)
                 if (pageViews > 1) {
+                    // not a landing page - nothing further to do here
                     return;
                 }
-                self.isLandingPage = true;
                 self.debug('Detected landing page');
             }
 
@@ -538,6 +543,12 @@
             self.globalTraits['Session Count'] = sessionCount;
             setCookie('sessionCount', sessionCount, 366);
             self.debug('Session count: ' + sessionCount);
+
+            // at this point we're either a landing page hit or counting a new session due to timeout
+            // track Session Started event for identified users and session timeouts
+            // i.e. not anonymous landing pages, of which we typically expect many
+            // but already have the Landing Page event for.
+            self.trackSessionStart = sessionTimedOut || self.userId;
 
             if (sessionTimedOut) {
                 // we don't update attribution tracking when tracking a new session due to inactivity
@@ -676,8 +687,8 @@
                 oVsKey = 'Optimizely Variations';
             var oEs = userTraits[oEsKey],
                 oVs = userTraits[oVsKey];
-            self.globalTraits[oEsKey] = oEs ? (typeof oEs.indexOf === 'function' ? oEs : [oEs]) : [];
-            self.globalTraits[oVsKey] = oVs ? (typeof oVs.indexOf === 'function' ? oVs : [oVs]) : [];
+            self.globalTraits[oEsKey] = oEs ? (typeof oEs.sort === 'function' ? oEs : [oEs]) : [];
+            self.globalTraits[oVsKey] = oVs ? (typeof oVs.sort === 'function' ? oVs : [oVs]) : [];
 
             for (var i = 0; i < activeExperiments.length; i++) {
                 var experimentId = activeExperiments[i];
@@ -790,8 +801,8 @@
             }
         }
 
-        function replayReady() {
-            replay(getQueue(['ready']));
+        function replayPreSniff() {
+            replay(getQueue(['ready', 'identify']));
         }
 
         function replayQueue() {
