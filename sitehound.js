@@ -732,6 +732,8 @@
                 var userTraits = {},
                     specialKeys = [
                         'name',
+                        'firstName',
+                        'lastName',
                         'email',
                         'createdAt'
                     ];
