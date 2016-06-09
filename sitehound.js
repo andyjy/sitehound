@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.67 - 8th June 2016
+//  @version       0.9.68 - 9th June 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.67",
+    var VERSION = "0.9.68",
         CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
@@ -177,8 +177,8 @@
                 error('Warning: Mixpanel cookie detected - update Mixpanel config to use localStorage.');
             }
 
-            // replay any ready() events queued up by the snippet before the lib was loaded
-            replayReady();
+            // replay any ready()/identify() events queued up by the snippet before the lib was loaded
+            replayPreSniff();
 
             if (initialConfig.sniffOnLoad || initialConfig.isDone) { // isDone: legacy
                 self.sniff();
@@ -801,8 +801,8 @@
             }
         }
 
-        function replayReady() {
-            replay(getQueue(['ready']));
+        function replayPreSniff() {
+            replay(getQueue(['ready', 'identify']));
         }
 
         function replayQueue() {
