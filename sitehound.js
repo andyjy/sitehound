@@ -1012,13 +1012,41 @@
 
     SiteHound.prototype.track = function(event, traits) {
         if (this.deferUntilSniff('track', arguments)) {return;}
+        this.debug('track', [event, traits]);
 
         if (typeof traits == 'object') {
+            // support only tracking an event once (per browser/cookie)
+            for (var key in {
+                // be tolerant..
+                'eventUniqueKey':1,
+                'event_unique_key':1,
+                'Event Unique Key':1,
+                'Event unique key':1,
+                'event unique key':1
+            }) {
+                if (traits.key) {
+                    // found key
+                    key = sanitize(traits[key]);
+                    // pair with event name
+                    function sanitize(s) {
+                        return s.replace(';', '_').replace(':', '_');
+                    }
+                    var thisEventKey = sanitize(event) + ':' + sanitize(key);
+                    var priorEvents = getCookie('uniqueEvents').split(';');
+                    if (priorEvents.indexOf(thisEventKey) !== -1) {
+                        // already tracked for this user - skip
+                        this.debug('already tracked unique event, skipping: ' + thisEventKey);
+                        return;
+                    } // else - first time we're trying to track this unique event - proceed
+                    setCookie('uniqueEvents', priorEvents.push(thisEventKey).join(';'));
+                    // done here - found a unique event trait; no need to search for other matches
+                    break;
+                }
+            }
             traits = this.getTraitsToSend(traits);
         } else {
             traits = this.getTraitsToSend();
         }
-        this.debug('track', [event, traits]);
         this.adaptor.track(event, traits);
     }
 
