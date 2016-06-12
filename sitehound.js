@@ -1124,8 +1124,8 @@
 
     SiteHound.prototype.trackError = function(e) {
         this.adaptor.track('Tracking Error', {
-            name: e.name,
-            message: e.message,
+            name: typeof e === 'object' ? e.name : '',
+            message: typeof e === 'object' ? e.message : e,
             'SiteHound library version': this.VERSION
         });
         error(e.name + '; ' + e.message);
