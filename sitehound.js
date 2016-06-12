@@ -1060,26 +1060,26 @@
         this.track(event, params);
     }
 
-    SiteHound.prototype.trackLink = function(elements, name) {
+    SiteHound.prototype.trackLink = function(elements, name, traits) {
         if (this.deferUntilSniff('trackLink', arguments)) {return;}
 
         var elementInfo = {};
         if (elements && elements.selector) { elementInfo.selector = elements.selector; }
         if (elements && elements.length) { elementInfo.length = elements.length; }
-        this.debug('trackLink', [elementInfo, name]);
+        this.debug('trackLink', [elementInfo, name, traits]);
 
-        this.adaptor.trackLink(elements, name, this.getTraitsToSend());
+        this.adaptor.trackLink(elements, name, this.getTraitsToSend(traits));
     }
 
-    SiteHound.prototype.trackForm = function(elements, name) {
+    SiteHound.prototype.trackForm = function(elements, name, traits) {
         if (this.deferUntilSniff('trackForm', arguments)) {return;}
 
         var elementInfo = {};
         if (elements && elements.selector) { elementInfo.selector = elements.selector; }
         if (elements && elements.length) { elementInfo.length = elements.length; }
-        this.debug('trackForm', [elementInfo, name]);
+        this.debug('trackForm', [elementInfo, name, traits]);
 
-        this.adaptor.trackForm(elements, name, this.getTraitsToSend());
+        this.adaptor.trackForm(elements, name, this.getTraitsToSend(traits));
     }
 
     SiteHound.prototype.ready = function(f) {
