@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.68 - 9th June 2016
+//  @version       0.9.69 - 25th Aug 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.68",
+    var VERSION = "0.9.69",
         CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
@@ -1012,13 +1012,41 @@
 
     SiteHound.prototype.track = function(event, traits) {
         if (this.deferUntilSniff('track', arguments)) {return;}
+        this.debug('track', [event, traits]);
 
         if (typeof traits == 'object') {
+            // support only tracking an event once (per browser/cookie)
+            for (var key in {
+                // be tolerant..
+                'eventUniqueKey':1,
+                'event_unique_key':1,
+                'Event Unique Key':1,
+                'Event unique key':1,
+                'event unique key':1
+            }) {
+                if (traits[key]) {
+                    // found key
+                    key = sanitize(traits[key]);
+                    // pair with event name
+                    function sanitize(s) {
+                        return s.replace(';', '_').replace(':', '_');
+                    }
+                    var thisEventKey = sanitize(event) + ':' + sanitize(key);
+                    var priorEvents = getCookie('uniqueEvents').split(';');
+                    if (priorEvents.indexOf(thisEventKey) !== -1) {
+                        // already tracked for this user - skip
+                        this.debug('already tracked unique event, skipping: ' + thisEventKey);
+                        return;
+                    } // else - first time we're trying to track this unique event - proceed
+                    setCookie('uniqueEvents', priorEvents.push(thisEventKey).join(';'));
+                    // done here - found a unique event trait; no need to search for other matches
+                    break;
+                }
+            }
             traits = this.getTraitsToSend(traits);
         } else {
             traits = this.getTraitsToSend();
         }
-        this.debug('track', [event, traits]);
         this.adaptor.track(event, traits);
     }
 
@@ -1060,26 +1088,26 @@
         this.track(event, params);
     }
 
-    SiteHound.prototype.trackLink = function(elements, name) {
+    SiteHound.prototype.trackLink = function(elements, name, traits) {
         if (this.deferUntilSniff('trackLink', arguments)) {return;}
 
         var elementInfo = {};
         if (elements && elements.selector) { elementInfo.selector = elements.selector; }
         if (elements && elements.length) { elementInfo.length = elements.length; }
-        this.debug('trackLink', [elementInfo, name]);
+        this.debug('trackLink', [elementInfo, name, traits]);
 
-        this.adaptor.trackLink(elements, name, this.getTraitsToSend());
+        this.adaptor.trackLink(elements, name, this.getTraitsToSend(traits));
     }
 
-    SiteHound.prototype.trackForm = function(elements, name) {
+    SiteHound.prototype.trackForm = function(elements, name, traits) {
         if (this.deferUntilSniff('trackForm', arguments)) {return;}
 
         var elementInfo = {};
         if (elements && elements.selector) { elementInfo.selector = elements.selector; }
         if (elements && elements.length) { elementInfo.length = elements.length; }
-        this.debug('trackForm', [elementInfo, name]);
+        this.debug('trackForm', [elementInfo, name, traits]);
 
-        this.adaptor.trackForm(elements, name, this.getTraitsToSend());
+        this.adaptor.trackForm(elements, name, this.getTraitsToSend(traits));
     }
 
     SiteHound.prototype.ready = function(f) {
@@ -1124,8 +1152,8 @@
 
     SiteHound.prototype.trackError = function(e) {
         this.adaptor.track('Tracking Error', {
-            name: e.name,
-            message: e.message,
+            name: typeof e === 'object' ? e.name : '',
+            message: typeof e === 'object' ? e.message : e,
             'SiteHound library version': this.VERSION
         });
         error(e.name + '; ' + e.message);
