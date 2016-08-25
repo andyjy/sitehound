@@ -758,12 +758,22 @@
                 if (!self.adaptor.userId()) {
                     // session up to here has been anonymous
                     self.debug('Anonymous session until now - alias()');
-                    self.adaptor.alias(self.userId);
-                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
-                    self.adaptor.identify('x');
+                    // XXX: alias() does nothing with Amplitude - instead we alias by default.
+                    // self.adaptor.alias(self.userId);
+                    // // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
+                    // self.adaptor.identify(null);
                 } else {
+                    // XXX: not anonymous up until now
                     currentUserId = self.adaptor.userId();
                     self.debug('Current userId: ' + currentUserId);
+                    if (self.userId !== currentUserId) {
+                        // XXX: force amplitute to log out so we don't combine profiles as by default
+                        self.adaptor.identify(null);
+                        if (window.amplitude && window.amplitude.getInstance()) {
+                            // XXX: amplitude requires regenerating device ID on logout
+                            window.amplitude.getInstance().regenerateDeviceId();
+                        }
+                    }
                 }
                 self.debug('adaptor.identify(' + self.userId + ', [traits])');
                 self.adaptor.identify(self.userId, traits);
