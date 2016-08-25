@@ -1024,7 +1024,7 @@
                 'Event unique key':1,
                 'event unique key':1
             }) {
-                if (traits.key) {
+                if (traits[key]) {
                     // found key
                     key = sanitize(traits[key]);
                     // pair with event name
