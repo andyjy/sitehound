@@ -756,21 +756,39 @@
                 var traits = mergeObjects(self.globalTraits, userTraits);
                 var currentUserId;
                 if (!self.adaptor.userId()) {
-                    // session up to here has been anonymous
-                    self.debug('Anonymous session until now - alias()');
-                    // XXX: alias() does nothing with Amplitude - instead we alias by default.
-                    // self.adaptor.alias(self.userId);
-                    // // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
-                    // self.adaptor.identify(null);
+                    self.debug('Anonymous session until now');
+                    // ~~ Mixpanel hack ~~
+                    // At this point we alias() for Mixpanel
+                    // (alias() is not implemented with most other tools - e.g. Amplitude aliases anon => logged in users by default)
+                    //
+                    // 1. For Mixpanel, we consciously go against their recommendation and always alias() on login
+                    // If a profile with this user ID already exists within Mixpanel, it will ignore the alias() call
+                    //
+                    // TODO: mixpanel alias() includes callback to call identify() with userId once the alias API call returns
+                    // - should we implement manually to avoid this?
+                    self.adaptor.alias(self.userId,
+                        undefined,
+                        {integrations: {'All': false, 'Mixpanel': true}}
+                    );
+                    // 2. Next, we ensure identify() takes hold even if alias() was silently ignored because already in use
+                    // TODO: will this work with null? vs. 'x'..
+                    self.adaptor.identify('x',
+                        {},
+                        {integrations: {'All': false, 'Mixpanel': true}}
+                    );
                 } else {
-                    // XXX: not anonymous up until now
+                    // User was not anonymous up until now
                     currentUserId = self.adaptor.userId();
                     self.debug('Current userId: ' + currentUserId);
                     if (self.userId !== currentUserId) {
-                        // XXX: force amplitute to log out so we don't combine profiles as by default
+                        // User ID mismatch - we need to log out
+                        // Force log out so Amplitude etc doesn't combine user profiles as by default
                         self.adaptor.identify(null);
-                        if (window.amplitude && window.amplitude.getInstance()) {
-                            // XXX: amplitude requires regenerating device ID on logout
+                        // ~~ Amplitude hack ~~
+                        // Amplitude uses it's Device ID to track users, and to implement a log out requires
+                        // us to explicitly create a new Device ID
+                        if (window.amplitude && window.amplitude.getInstance
+                            && window.amplitude.getInstance() && window.amplitude.getInstance().regenerateDeviceId) {
                             window.amplitude.getInstance().regenerateDeviceId();
                         }
                     }
@@ -1014,10 +1032,10 @@
         }
     }
 
-    SiteHound.prototype.alias = function(new_alias) {
+    SiteHound.prototype.alias = function(new_alias, from, options) {
         if (this.deferUntilSniff('alias', arguments)) {return;}
-        this.debug('alias', [new_alias]);
-        this.adaptor.alias(new_alias);
+        this.debug('alias', [new_alias, from, options]);
+        this.adaptor.alias(new_alias, from, options);
     }
 
     SiteHound.prototype.track = function(event, traits) {
@@ -1306,8 +1324,8 @@
             });
         }
 
-        this.identify = function(a, b) {
-            analytics.identify(a, b);
+        this.identify = function(a, b, c) {
+            analytics.identify(a, b, c);
         }
 
         this.track = function(event, traits) {
@@ -1326,8 +1344,8 @@
             analytics.page(a, b, c);
         }
 
-        this.alias = function(to) {
-            analytics.alias(to);
+        this.alias = function(to, from, options) {
+            analytics.alias(to, from, options);
         }
 
         this.userId = function() {
