@@ -459,7 +459,7 @@
             }
             // track landing page event?
             if (self.trackLandingPage) {
-                trackPage('Landing', self.landingPageTraits);
+                self.track('Viewed Landing Page', self.landingPageTraits);
                 // only do this once
                 self.trackLandingPage = false;
             }
