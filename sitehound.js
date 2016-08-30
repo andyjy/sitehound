@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.70",
+    var VERSION = "0.9.70a",
         CONSOLE_PREFIX = '[SiteHound] ';
 
     // where we store registered adaptors for different platforms
@@ -772,10 +772,12 @@
                     );
                     // 2. Next, we ensure identify() takes hold even if alias() was silently ignored because already in use
                     // TODO: will this work with null? vs. 'x'..
+                    /*
                     self.adaptor.identify('x',
                         {},
                         {integrations: {'All': false, 'Mixpanel': true}}
                     );
+                    */
                 } else {
                     // User was not anonymous up until now
                     currentUserId = self.adaptor.userId();
@@ -783,6 +785,7 @@
                     if (self.userId !== currentUserId) {
                         // User ID mismatch - we need to log out
                         // Force log out so Amplitude etc doesn't combine user profiles as by default
+                        // ** TODO: include this for non-Amplitude??
                         self.adaptor.identify(null);
                         // ~~ Amplitude hack ~~
                         // Amplitude uses it's Device ID to track users, and to implement a log out requires
@@ -807,6 +810,8 @@
                 //  - even if it's been set to null
                 self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
                 if (self.detectLogout && !getCookie('logged_out')) {
+                    // we don't actually "log out" for the anaytics - keep tracking under the same user ID
+                    // but set a cookie so we only track the Logout event once
                     self.debug('doIdentify(): detecting potential logout..');
                     if (self.adaptor.userId()) {
                         // we were logged in earlier in the session
