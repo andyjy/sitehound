@@ -726,6 +726,9 @@
 
         // handle user identification, including login/logout
         function doIdentify() {
+            // to be explicit
+            var mixpanel = window.mixpanel;
+            var amplitude = window.amplitude;
             if (self.userId) {
                 // we have a logged-in user
                 self.debug('doIdentify(): received userId: ' + self.userId);
@@ -777,10 +780,10 @@
                     }
                     if (usingMixpanel()) {
                         // recreate mixpanel.alias() but with our own behaviours
-                        var current = window.mixpanel.get_distinct_id ? window.mixpanel.get_distinct_id() : null;
+                        var current = mixpanel.get_distinct_id ? mixpanel.get_distinct_id() : null;
                         if (current != self.userId) {
-                            window.mixpanel.register({ '__alias': self.userId });
-                            window.mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': original }, function() {
+                            mixpanel.register({ '__alias': self.userId });
+                            mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': original }, function() {
                                 // callback - mixpanel alias API call complete
                                 // unlike mixpanel.js, we don't call identify() here (to flush the people queue)
                                 // since we're calling it shortly anyhow
@@ -794,14 +797,15 @@
                     self.debug('Current userId: ' + currentUserId);
                     if (self.userId !== currentUserId) {
                         // User ID mismatch - we need to log out
-                        if (usingAmplitude() && window.amplitude.getInstance && window.amplitude.getInstance()) {
+                        var amp;
+                        if (usingAmplitude() && amplitude.getInstance && (amp = amplitude.getInstance())) {
                             // Amplitude logout: https://github.com/amplitude/Amplitude-Javascript/#logging-out-and-anonymous-users
                             // Force log out so Amplitude doesn't combine user profiles as by default
-                            window.amplitude.getInstance().setUserId(null);
+                            amp.setUserId(null);
                             // Amplitude uses it's Device ID to track users, and to implement a log out requires
                             // us to explicitly create a new Device ID
-                            if (window.amplitude.getInstance().regenerateDeviceId) {
-                                window.amplitude.getInstance().regenerateDeviceId();
+                            if (amp.regenerateDeviceId) {
+                                amp.regenerateDeviceId();
                             }
                         }
                         // else if not using Amplitude - no need to log out
