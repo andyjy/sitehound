@@ -30,7 +30,8 @@
 //
 !function() {
     var VERSION = "0.9.70a",
-        CONSOLE_PREFIX = '[SiteHound] ';
+        CONSOLE_PREFIX = '[SiteHound] ',
+        ALIAS_WAIT_TIMEOUT = 300; // milliseconds
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
@@ -64,6 +65,10 @@
         var intervalId,
             currentURL,
             urlChangeQueue = [];
+
+        // store for deferred adaptor functions
+        var adaptorDeferredFunctions,
+            adaptorDeferredQueue = [];
 
         if (initialConfig.adaptor && ((initialConfig.adaptor.klass || initialConfig.adaptor) !== adaptor.klass)) {
             // adaptor has been changed since initial load
@@ -768,10 +773,6 @@
                     // If a profile with this user ID already exists within Mixpanel, it will ignore the alias() call
                     //
                     // Below, we subsequently ensure identify() takes hold even if alias() was silently ignored because already in use
-                    //
-                    // XXX TODO: mixpanel alias() includes callback to call identify() with userId once the alias API call returns
-                    //             - should we implement manually to avoid this?
-                    // XXX TODO: delay subsequent identify() and track() calls until the alias() callback has completed
                     if (usingSegment()) {
                         self.adaptor.alias(self.userId,
                             undefined,
@@ -779,16 +780,25 @@
                         );
                     }
                     if (usingMixpanel()) {
+                        // pause all subsequent API calls until the Mixpanel alias() call has been processed
                         // recreate mixpanel.alias() but with our own behaviours
                         var current = mixpanel.get_distinct_id ? mixpanel.get_distinct_id() : null;
                         if (current != self.userId) {
+                            self.debug('Mixpanel: $create_alias');
+                            // delay future identify() and track() calls until the alias() callback has completed
+                            pauseAdaptor();
                             mixpanel.register({ '__alias': self.userId });
                             mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': original }, function() {
                                 // callback - mixpanel alias API call complete
                                 // unlike mixpanel.js, we don't call identify() here (to flush the people queue)
                                 // since we're calling it shortly anyhow
-                                // TODO XXX
+                                //
+                                // resume paused calls
+                                self.debug('Mixpanel: $create_alias callback');
+                                resumeAdaptor();
                             });
+                            // unpause within 300ms regardless
+                            setTimeout(resumeAdaptor, ALIAS_WAIT_TIMEOUT);
                         }
                     }
                 } else {
@@ -799,6 +809,7 @@
                         // User ID mismatch - we need to log out
                         var amp;
                         if (usingAmplitude() && amplitude.getInstance && (amp = amplitude.getInstance())) {
+                            self.debug('Amplitude: logout');
                             // Amplitude logout: https://github.com/amplitude/Amplitude-Javascript/#logging-out-and-anonymous-users
                             // Force log out so Amplitude doesn't combine user profiles as by default
                             amp.setUserId(null);
@@ -839,12 +850,14 @@
                 if (self.adaptor.userId()) {
                     if (usingMixpanel()) {
                         // Mixpanel fix: ensure we set mixpanel.distinct_id in sync with userId - as above
+                        self.debug('Mixpanel: register({distinct_id: ' + self.adaptor.userId() + '})')
                         mixpanel.register({distinct_id: self.adaptor.userId()});
                     }
                     if (self.thisPageTraits['Pageviews This Session'] == 0) {
                         // not told we're logged in, but we have a user ID from the analytics persistence, and
                         // it's our first pageview this session - therefore we were logged in and then out in prior session(s)
                         // - set logged_out session cookie to prevent tracking a false logout event at the start of this session
+                        self.debug('not logged in, but user ID from prior session - setting logged_out cookie');
                         setCookie('logged_out', true);
                     }
                 }
@@ -913,6 +926,41 @@
                 var method = args.shift();
                 if (self[method]) {
                     self[method].apply(self, args);
+                }
+            }
+        }
+
+        function pauseAdaptor() {
+            if (adaptorDeferredFunctions) {
+                self.debug('Called pauseAdaptor() but already paused');
+                return;
+            }
+            adaptorDeferredFunctions = {};
+            ['track', 'identify', 'page'].map(function(f) {
+                adaptorDeferredFunctions[f] = self.adaptor[f];
+                self.adaptor[f] = function() {
+                    adaptorDeferredQueue.push([f, arguments]);
+                }
+            });
+        }
+
+        function resumeAdaptor() {
+            if (!adaptorDeferredFunctions) {
+                // nothing to resume
+                return;
+            }
+            self.debug('resumeAdaptor()');
+            ['track', 'identify', 'page'].map(function(f) {
+                self.adaptor[f] = adaptorDeferredFunctions[f];
+            });
+            // replay queued calls
+            while (adaptorDeferredQueue && adaptorDeferredQueue.length > 0) {
+                var args = adaptorDeferredQueue.shift();
+                var method = args.shift();
+                if (self.adaptor[method]) {
+                    self.adaptor[method].apply(self, args);
+                } else {
+                    self.debug('Unrecognised adaptor method: ' + method);
                 }
             }
         }
