@@ -29,8 +29,9 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.70",
-        CONSOLE_PREFIX = '[SiteHound] ';
+    var VERSION = "0.9.70a",
+        CONSOLE_PREFIX = '[SiteHound] ',
+        ALIAS_WAIT_TIMEOUT = 300; // milliseconds
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
@@ -64,6 +65,10 @@
         var intervalId,
             currentURL,
             urlChangeQueue = [];
+
+        // store for deferred adaptor functions
+        var adaptorDeferredFunctions,
+            adaptorDeferredQueue = [];
 
         if (initialConfig.adaptor && ((initialConfig.adaptor.klass || initialConfig.adaptor) !== adaptor.klass)) {
             // adaptor has been changed since initial load
@@ -726,6 +731,9 @@
 
         // handle user identification, including login/logout
         function doIdentify() {
+            // to be explicit
+            var mixpanel = window.mixpanel;
+            var amplitude = window.amplitude;
             if (self.userId) {
                 // we have a logged-in user
                 self.debug('doIdentify(): received userId: ' + self.userId);
@@ -756,29 +764,118 @@
                 var traits = mergeObjects(self.globalTraits, userTraits);
                 var currentUserId;
                 if (!self.adaptor.userId()) {
-                    // session up to here has been anonymous
-                    self.debug('Anonymous session until now - alias()');
-                    self.adaptor.alias(self.userId);
-                    // hack: ensure identify() takes hold even if alias() was silently ignored because already in use
-                    self.adaptor.identify('x');
+                    self.debug('Anonymous session until now');
+                    // ~~ Mixpanel hack ~~
+                    // At this point we alias() for Mixpanel
+                    // (alias() is not implemented with most other tools - e.g. Amplitude aliases anon => logged in users by default)
+                    //
+                    // For Mixpanel, we consciously go against their recommendation and always alias() on login
+                    // If a profile with this user ID already exists within Mixpanel, it will ignore the alias() call
+                    //
+                    // Below, we subsequently ensure identify() takes hold even if alias() was silently ignored because already in use
+                    //
+                    // First, alias() for Segment - will be passed through to data warehouse etc
+                    if (usingSegment()) {
+                        self.debug('analytics.alias(' + self.userId + ')');
+                        self.adaptor.alias(self.userId,
+                            undefined,
+                            {integrations: {'Mixpanel': false}}
+                        );
+                    }
+                    // handle Mixpanel specially
+                    if (usingMixpanel()) {
+                        // recreate mixpanel.alias() but with our own behaviours
+                        var current = mixpanel.get_distinct_id ? mixpanel.get_distinct_id() : null;
+                        if (current != self.userId) {
+                            self.debug('Mixpanel: $create_alias');
+                            // pause future identify() and track() calls until the alias() callback has completed
+                            pauseAdaptor();
+                            mixpanel.register({ '__alias': self.userId });
+                            mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': current }, function() {
+                                // callback - mixpanel alias API call complete
+                                // unlike mixpanel.js, we don't call identify() here (to flush the people queue)
+                                // since we're calling it shortly anyhow
+                                //
+                                // resume paused calls
+                                self.debug('Mixpanel: $create_alias callback');
+                                resumeAdaptor();
+                            });
+                            // unpause within 300ms regardless
+                            setTimeout(function() {
+                                self.debug('Mixpanel: ALIAS_WAIT_TIMEOUT reached');
+                                resumeAdaptor();
+                                }, ALIAS_WAIT_TIMEOUT);
+                        } else {
+                            self.debug('mixpanel.distinct_id == sitehound.userId; no Mixpanel alias call');
+                        }
+                    }
                 } else {
+                    // We previously had a userId
                     currentUserId = self.adaptor.userId();
                     self.debug('Current userId: ' + currentUserId);
+                    if (self.userId !== currentUserId) {
+                        // User ID mismatch - we need to log out
+                        var amp;
+                        if (usingAmplitude() && amplitude.getInstance && (amp = amplitude.getInstance())) {
+                            self.debug('Amplitude: logout');
+                            // Amplitude logout: https://github.com/amplitude/Amplitude-Javascript/#logging-out-and-anonymous-users
+                            // Force log out so Amplitude doesn't combine user profiles as by default
+                            amp.setUserId(null);
+                            // Amplitude uses it's Device ID to track users, and to implement a log out requires
+                            // us to explicitly create a new Device ID
+                            if (amp.regenerateDeviceId) {
+                                amp.regenerateDeviceId();
+                            }
+                        }
+                        // else if not using Amplitude - no need to log out
+                        // instead we overwrite with new userId via the calls below
+                        // NB if this is a first-time login for the new userID, this will legitimately create a new
+                        // profile with distinct_id as the new ID, rather than a UUID
+                    }
                 }
                 self.debug('adaptor.identify(' + self.userId + ', [traits])');
                 self.adaptor.identify(self.userId, traits);
-                if (self.userId !== currentUserId) {
+                if (usingMixpanel()) {
+                    // Mixpanel fix: ensure we set mixpanel.distinct_id - and thus send all subsequent events with
+                    // the new userId - even if self.userId == mixpanel.ALIAS_ID_KEY
+                    // Since by default the Mixpanel library will stick with sending events under the old ID
+                    // when we've just aliased to the new ID. Therefore, if we called alias for an ID that had
+                    // already been aliased, subsequent events would end up under the incorrect user ID.
+                    // The fact we're doing this is why we need to delay all subsequent events until the callback
+                    // for the prior alias call indicates it was received successfully.
+                    self.debug('Mixpanel: set distinct_id');
+                    mixpanel.register({ distinct_id: self.userId });
+                }
+                if ((self.userId !== currentUserId) || getCookie('logged_out')) {
                     self.debug('userId != currentUserId - Login');
                     self.track('Login');
+                    setCookie('logged_out', '', -100);
                 }
-                setCookie('logged_out', '', -100);
             } else {
                 // no information about whether the user is currently logged in
+                // Nb: calling analytics.identify() without a userId will delegate to identify() with the user.id() from analytics.js
                 self.adaptor.identify(self.globalTraits);
+
+                if (self.adaptor.userId()) {
+                    if (usingMixpanel()) {
+                        // Mixpanel fix: ensure we set mixpanel.distinct_id in sync with userId - as above
+                        self.debug('Mixpanel: register({distinct_id: ' + self.adaptor.userId() + '})')
+                        mixpanel.register({ distinct_id: self.adaptor.userId() });
+                    }
+                    if (self.thisPageTraits['Pageviews This Session'] == 0) {
+                        // not told we're logged in, but we have a user ID from the analytics persistence, and
+                        // it's our first pageview this session - therefore we were logged in and then out in prior session(s)
+                        // - set logged_out session cookie to prevent tracking a false logout event at the start of this session
+                        self.debug('not logged in, but user ID from prior session - setting logged_out cookie');
+                        setCookie('logged_out', true);
+                    }
+                }
                 // by default, automatically detect logout if the userId property has been set
                 //  - even if it's been set to null
                 self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
                 if (self.detectLogout && !getCookie('logged_out')) {
+                    // we don't actually "log out" for the anaytics - keep tracking under the same user ID
+                    // but set a cookie so we only track the Logout event once
                     self.debug('doIdentify(): detecting potential logout..');
                     if (self.adaptor.userId()) {
                         // we were logged in earlier in the session
@@ -838,6 +935,49 @@
                 var method = args.shift();
                 if (self[method]) {
                     self[method].apply(self, args);
+                }
+            }
+        }
+
+        function pauseAdaptor() {
+            if (adaptorDeferredFunctions) {
+                self.debug('Called pauseAdaptor() but already paused');
+                return;
+            }
+            self.debug('pauseAdaptor()');
+            adaptorDeferredFunctions = {};
+            ['track', 'identify', 'page'].map(function(f) {
+                adaptorDeferredFunctions[f] = self.adaptor[f];
+                self.adaptor[f] = function() {
+                    self.debug('adding to deferred queue: ' + f);
+                    // convert from Arguments type to real array
+                    var args = Array.prototype.slice.call(arguments);
+                    // prepend method name
+                    args.unshift(f);
+                    adaptorDeferredQueue.push(args);
+                }
+            });
+        }
+
+        function resumeAdaptor() {
+            if (!adaptorDeferredFunctions) {
+                // nothing to resume
+                return;
+            }
+            self.debug('resumeAdaptor()');
+            ['track', 'identify', 'page'].map(function(f) {
+                self.adaptor[f] = adaptorDeferredFunctions[f];
+            });
+            adaptorDeferredFunctions = null;
+            // replay queued calls
+            while (adaptorDeferredQueue && adaptorDeferredQueue.length > 0) {
+                var args = adaptorDeferredQueue.shift();
+                var method = args.shift();
+                if (self.adaptor[method]) {
+                    self.debug('replaying deferred: ' + method);
+                    self.adaptor[method].apply(self.adaptor, args);
+                } else {
+                    self.debug('Unrecognised adaptor method: ' + method);
                 }
             }
         }
@@ -913,6 +1053,18 @@
         function setAdaptor(adaptor) {
             self.adaptor = adaptor;
             CONSOLE_PREFIX = '[SiteHound' + (adaptor && adaptor.klass ? ':' + adaptor.klass : '') + '] ';
+        }
+
+        function usingSegment() {
+            return self.adaptor.klass == 'segment';
+        }
+
+        function usingMixpanel() {
+            return window.mixpanel && (!usingSegment() || window.analytics.Integrations.Mixpanel);
+        }
+
+        function usingAmplitude() {
+            return window.amplitude && usingSegment() && window.analytics.Integrations.Amplitude;
         }
 
         // Modified from https://github.com/segmentio/top-domain v2.0.1
@@ -1004,10 +1156,10 @@
         }
     }
 
-    SiteHound.prototype.alias = function(new_alias) {
+    SiteHound.prototype.alias = function(new_alias, from, options) {
         if (this.deferUntilSniff('alias', arguments)) {return;}
-        this.debug('alias', [new_alias]);
-        this.adaptor.alias(new_alias);
+        this.debug('alias', [new_alias, from, options]);
+        this.adaptor.alias(new_alias, from, options);
     }
 
     SiteHound.prototype.track = function(event, traits) {
@@ -1296,8 +1448,8 @@
             });
         }
 
-        this.identify = function(a, b) {
-            analytics.identify(a, b);
+        this.identify = function(a, b, c) {
+            analytics.identify(a, b, c);
         }
 
         this.track = function(event, traits) {
@@ -1316,8 +1468,8 @@
             analytics.page(a, b, c);
         }
 
-        this.alias = function(to) {
-            analytics.alias(to);
+        this.alias = function(to, from, options) {
+            analytics.alias(to, from, options);
         }
 
         this.userId = function() {
