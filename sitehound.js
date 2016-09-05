@@ -534,6 +534,9 @@
                 self.thisPageTraits['Referrer Type'] = self.detectPage(referrerPath);
             }
 
+            // lowercase to match segment default page properties
+            self.thisPageTraits['host'] = location.host;
+
             if (!sessionTimedOut) {
                 // is this a landing page hit? (i.e. first pageview in session)
                 if (pageViews > 1) {
