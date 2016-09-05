@@ -122,8 +122,6 @@
                 // - defaults to true if we've passed a value (incl. null), false otherwise
                 detectLogout: undefined,
 
-                // log debugging messages to the console?
-                logToConsole: false,
                 // suppress all non-error output to the console?
                 silent: false,
                 // session timeout before tracking the start of a new session (in minutes)
@@ -133,6 +131,11 @@
 
                 // queued-up methods to execute
                 queue: [],
+
+                // locally-persisted client context - stored urlencoded via cookie
+                clientContext: {},
+                // ..stored only for the session duration
+                clientSessionContext: {},
 
                 // preserve from snippet to assist with debugging
                 SNIPPET_VERSION: undefined
@@ -164,14 +167,12 @@
             self.cookieDomain = topDomain(location.hostname);
             self.debug('Cookie domain: ' + self.cookieDomain);
 
-            if (getCookie('dnt')) {
+            // populate from cookie
+            readLocalContext();
+
+            if (self.clientContext.dnt) {
                 self.info('Do-not-track cookie present - disabling.');
                 self.adaptor = 'disabled';
-            }
-
-            // debug mode?
-            if (getCookie('logToConsole')) {
-                self.logToConsole = true;
             }
 
             // replace the global sitehound var with our instance
@@ -202,7 +203,7 @@
                     self.info('Ignoring host: ' + location.hostname);
                     self.adaptor = 'disabled';
                 }
-                if (getCookie('dnt')) {
+                if (self.clientContext.dnt) {
                     self.info('Do-not-track cookie present - disabling.');
                     self.adaptor = 'disabled';
                 }
@@ -335,7 +336,7 @@
         }
 
         this.debug = function(message, object) {
-            if (!self.logToConsole) {
+            if (!self.clientContext.logToConsole) {
                 return;
             }
             log(message, object);
@@ -343,24 +344,14 @@
 
         this.doNotTrack = function(dnt) {
             dnt = (typeof dnt === 'undefined') ? true : !!dnt;
-            if (dnt) {
-                setCookie('dnt', '1', 1000);
-            } else {
-                // clear cookie - track again
-                setCookie('dnt', '', -100);
-            }
-            self.debug('doNotTrack', dnt ? 'true' : 'false')
+            setLocalContext('dnt', dnt);
+            self.debug('doNotTrack:' + dnt);
         }
 
         this.debugMode = function(logToConsole) {
-            self.logToConsole = logToConsole = (typeof logToConsole === 'undefined') ? true : !!logToConsole;
-            if (logToConsole) {
-                setCookie('logToConsole', '1', 1000);
-            } else {
-                // clear cookie - track again
-                setCookie('logToConsole', '', -100);
-            }
-            self.debug('debugMode', logToConsole ? 'true' : 'false')
+            logToConsole = (typeof logToConsole === 'undefined') ? true : !!logToConsole;
+            setLocalContext('logToConsole', logToConsole);
+            self.debug('debugMode: ' + logToConsole);
         }
 
         this.onURLChange = this.onUrlChange = function(f) {
@@ -491,8 +482,8 @@
 
         function examineSession() {
             // visitor first seen
-            var firstSeen = getCookie('firstSeen') || new Date().toISOString();
-            setCookie('firstSeen', firstSeen, 366);
+            var firstSeen = self.clientContext.firstSeen || new Date().toISOString();
+            setLocalContext('firstSeen', firstSeen);
             var daysSinceFirst = Math.floor((new Date() - new Date(firstSeen))/1000/60/60/24);
             self.globalTraits['First Seen'] = firstSeen;
             self.globalTraits['Days Since First Seen'] = daysSinceFirst;
@@ -500,8 +491,8 @@
             self.debug('Days since first seen: ' + daysSinceFirst);
 
             // session start + last updated time
-            var sessionStarted = getCookie('sessionStarted') || new Date().toISOString(),
-                sessionUpdated = getCookie('sessionUpdated') || new Date().toISOString();
+            var sessionStarted = self.clientSessionContext.sessionStarted || new Date().toISOString(),
+                sessionUpdated = self.clientSessionContext.sessionUpdated || new Date().toISOString();
             var sessionSilent = Math.floor((new Date() - new Date(sessionUpdated))/1000/60);
             self.debug('Session started: ' + sessionStarted);
             self.debug('Minutes since last event: ' + sessionSilent);
@@ -514,13 +505,13 @@
             self.debug('Session duration: ' + sessionDuration);
             self.globalTraits['Session Started'] = sessionStarted;
             self.globalTraits['Minutes Since Session Start'] = sessionDuration;
-            setCookie('sessionStarted', sessionStarted);
-            setCookie('sessionUpdated', new Date().toISOString());
+            setLocalContext('sessionStarted', sessionStarted, true);
+            setLocalContext('sessionUpdated', new Date().toISOString(), true);
 
             // tracked pageviews this session
-            var pageViews = (sessionTimedOut ? 0 : parseInt(getCookie('pageViews') || 0)) + 1;
+            var pageViews = (sessionTimedOut ? 0 : parseInt(self.clientSessionContext.pageViews || 0)) + 1;
             self.thisPageTraits['Pageviews This Session'] = pageViews;
-            setCookie('pageViews', pageViews);
+            setLocalContext('pageViews', pageViews, true);
             self.debug('Pageviews: ' + pageViews);
 
             var referrerParts = document.referrer.match(/https?:\/\/([^/]+)(\/.*)/),
@@ -547,9 +538,9 @@
             }
 
             // session count for this visitor
-            var sessionCount = parseInt(getCookie('sessionCount') || 0) + 1;
+            var sessionCount = parseInt(self.clientContext.sessionCount || 0) + 1;
             self.globalTraits['Session Count'] = sessionCount;
-            setCookie('sessionCount', sessionCount, 366);
+            setLocalContext('sessionCount', sessionCount);
             self.debug('Session count: ' + sessionCount);
 
             // at this point we're either a landing page hit or counting a new session due to timeout
@@ -849,10 +840,10 @@
                     self.debug('Mixpanel: set distinct_id');
                     mixpanel.register({ distinct_id: self.userId });
                 }
-                if ((self.userId !== currentUserId) || getCookie('logged_out')) {
+                if ((self.userId !== currentUserId) || self.clientSessionContext.loggedOut) {
                     self.debug('userId != currentUserId - Login');
                     self.track('Login');
-                    setCookie('logged_out', '', -100);
+                    setLocalContext('loggedOut', '');
                 }
             } else {
                 // no information about whether the user is currently logged in
@@ -870,20 +861,20 @@
                         // it's our first pageview this session - therefore we were logged in and then out in prior session(s)
                         // - set logged_out session cookie to prevent tracking a false logout event at the start of this session
                         self.debug('not logged in, but user ID from prior session - setting logged_out cookie');
-                        setCookie('logged_out', true);
+                        setLocalContext('logged_out', true, true);
                     }
                 }
                 // by default, automatically detect logout if the userId property has been set
                 //  - even if it's been set to null
                 self.detectLogout = (self.detectLogout === undefined) ? (self.userId !== undefined) : self.detectLogout;
-                if (self.detectLogout && !getCookie('logged_out')) {
+                if (self.detectLogout && !self.clientSessionContext.loggedOut) {
                     // we don't actually "log out" for the anaytics - keep tracking under the same user ID
                     // but set a cookie so we only track the Logout event once
                     self.debug('doIdentify(): detecting potential logout..');
                     if (self.adaptor.userId()) {
                         // we were logged in earlier in the session
                         self.track('Logout');
-                        setCookie('logged_out', true);
+                        setLocalContext('loggedOut', true, true);
                         self.debug('Logout');
                     }
                 }
@@ -997,6 +988,45 @@
             }
             // trigger sniffing for new virtual pageview
             self.sniff();
+        }
+
+        function setLocalContext(name, value, session_only) {
+            if (session_only) {
+                self.clientSessionContext[name] = value;
+            } else {
+                self.clientContext[name] = value;
+            }
+            var data = session_only ? self.clientSessionContext : self.clientContext;
+            data = encodeQueryString(data);
+            setCookie(session_only ? 'context_session' : 'context', data, session_only ? 0 : 366);
+        }
+
+        function readLocalContext() {
+            try {
+                self.clientContext = decodeQueryString(getCookie('context'));
+            } catch (e) {
+                self.debug('error parsing context cookie');
+            }
+            try {
+                self.clientSessionContext = decodeQueryString(getCookie('context_session'));
+            } catch (e) {
+                self.debug('error parsing context_session cookie');
+            }
+            if (typeof self.clientContext !== 'object') { self.clientContext = {}; }
+            if (typeof self.clientSessionContext !== 'object') { self.clientSessionContext = {}; }
+            function getFromOldCookie(name, session_only, cookie_name) {
+                cookie_name = cookie_name || name;
+                var context = session_only ? self.clientSessionContext : self.clientContext;
+                if (context[name] === undefined) {
+                    setLocalContext(name, getCookie(cookie_name), session_only);
+                }
+                // remove legacy cookie
+                setCookie(cookie_name, '', -100);
+            }
+            // detect legacy cookies
+            ['firstSeen', 'sessionCount'].map(function (a) { getFromOldCookie(a); });
+            ['sessionStarted', 'sessionUpdated', 'pageViews'].map(function (a) { getFromOldCookie(a, true); });
+            getFromOldCookie('loggedOut', true, 'logged_out');
         }
 
         function setCookie(name, value, expiry_days, domain) {
@@ -1187,13 +1217,13 @@
                         return s.replace(';', '_').replace(':', '_');
                     }
                     var thisEventKey = sanitize(event) + ':' + sanitize(key);
-                    var priorEvents = getCookie('uniqueEvents').split(';');
+                    var priorEvents = (self.clientSessionContext.uniqueEvents || '').split(';');
                     if (priorEvents.indexOf(thisEventKey) !== -1) {
                         // already tracked for this user - skip
                         this.debug('already tracked unique event, skipping: ' + thisEventKey);
                         return;
                     } // else - first time we're trying to track this unique event - proceed
-                    setCookie('uniqueEvents', priorEvents.push(thisEventKey).join(';'));
+                    setLocalContext('uniqueEvents', priorEvents.push(thisEventKey).join(';'));
                     // done here - found a unique event trait; no need to search for other matches
                     break;
                 }
@@ -1425,6 +1455,28 @@
         return '';
     }
 
+    function decodeQueryString(str) {
+        var object = {};
+        str.split('&').map(function(param) {
+            if (!param) { return; }
+            param = param.split('=').map(function(component) {
+                return decodeURIComponent(component);
+            });
+            object[param[0]] = param[1];
+        });
+        return object;
+    }
+
+    function encodeQueryString(object) {
+        var params = [];
+        for (var param in object) {
+            if (object.hasOwnProperty(param)) {
+                params.push(encodeURIComponent(param) + '=' + encodeURIComponent(object[param]));
+            }
+        }
+        return params.join('&');
+    }
+
     //
     // Adaptors
     //
@@ -1444,9 +1496,6 @@
 
         this.ready = function(f) {
             waitFor('analytics.ready', function() {
-                if ((window.sitehound && window.sitehound.logToConsole) || getCookie('logToConsole')) {
-                    log('window.analytics detected');
-                }
                 analytics.ready(f);
             });
         }
