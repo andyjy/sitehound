@@ -791,7 +791,7 @@
                             // pause future identify() and track() calls until the alias() callback has completed
                             pauseAdaptor();
                             mixpanel.register({ '__alias': self.userId });
-                            mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': original }, function() {
+                            mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': current }, function() {
                                 // callback - mixpanel alias API call complete
                                 // unlike mixpanel.js, we don't call identify() here (to flush the people queue)
                                 // since we're calling it shortly anyhow
@@ -950,7 +950,11 @@
                 adaptorDeferredFunctions[f] = self.adaptor[f];
                 self.adaptor[f] = function() {
                     self.debug('adding to deferred queue: ' + f);
-                    adaptorDeferredQueue.push([f, arguments]);
+                    // convert from Arguments type to real array
+                    var args = Array.prototype.slice.call(arguments);
+                    // prepend method name
+                    args.unshift(f);
+                    adaptorDeferredQueue.push(args);
                 }
             });
         }
@@ -964,13 +968,14 @@
             ['track', 'identify', 'page'].map(function(f) {
                 self.adaptor[f] = adaptorDeferredFunctions[f];
             });
+            adaptorDeferredFunctions = null;
             // replay queued calls
             while (adaptorDeferredQueue && adaptorDeferredQueue.length > 0) {
                 var args = adaptorDeferredQueue.shift();
                 var method = args.shift();
                 if (self.adaptor[method]) {
                     self.debug('replaying deferred: ' + method);
-                    self.adaptor[method].apply(self, args);
+                    self.adaptor[method].apply(self.adaptor, args);
                 } else {
                     self.debug('Unrecognised adaptor method: ' + method);
                 }
