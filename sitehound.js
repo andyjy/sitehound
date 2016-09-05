@@ -773,19 +773,21 @@
                     // If a profile with this user ID already exists within Mixpanel, it will ignore the alias() call
                     //
                     // Below, we subsequently ensure identify() takes hold even if alias() was silently ignored because already in use
+                    //
+                    // First, alias() for Segment - will be passed through to data warehouse etc
                     if (usingSegment()) {
                         self.adaptor.alias(self.userId,
                             undefined,
                             {integrations: {'Mixpanel': false}}
                         );
                     }
+                    // handle Mixpanel specially
                     if (usingMixpanel()) {
-                        // pause all subsequent API calls until the Mixpanel alias() call has been processed
                         // recreate mixpanel.alias() but with our own behaviours
                         var current = mixpanel.get_distinct_id ? mixpanel.get_distinct_id() : null;
                         if (current != self.userId) {
                             self.debug('Mixpanel: $create_alias');
-                            // delay future identify() and track() calls until the alias() callback has completed
+                            // pause future identify() and track() calls until the alias() callback has completed
                             pauseAdaptor();
                             mixpanel.register({ '__alias': self.userId });
                             mixpanel.track('$create_alias', { 'alias': self.userId, 'distinct_id': original }, function() {
@@ -798,7 +800,10 @@
                                 resumeAdaptor();
                             });
                             // unpause within 300ms regardless
-                            setTimeout(resumeAdaptor, ALIAS_WAIT_TIMEOUT);
+                            setTimeout(function() {
+                                self.debug('Mixpanel: ALIAS_WAIT_TIMEOUT reached');
+                                resumeAdaptor();
+                                }, ALIAS_WAIT_TIMEOUT);
                         }
                     }
                 } else {
@@ -851,7 +856,7 @@
                     if (usingMixpanel()) {
                         // Mixpanel fix: ensure we set mixpanel.distinct_id in sync with userId - as above
                         self.debug('Mixpanel: register({distinct_id: ' + self.adaptor.userId() + '})')
-                        mixpanel.register({distinct_id: self.adaptor.userId()});
+                        mixpanel.register({ distinct_id: self.adaptor.userId() });
                     }
                     if (self.thisPageTraits['Pageviews This Session'] == 0) {
                         // not told we're logged in, but we have a user ID from the analytics persistence, and
@@ -935,10 +940,12 @@
                 self.debug('Called pauseAdaptor() but already paused');
                 return;
             }
+            self.debug('pauseAdaptor()');
             adaptorDeferredFunctions = {};
             ['track', 'identify', 'page'].map(function(f) {
                 adaptorDeferredFunctions[f] = self.adaptor[f];
                 self.adaptor[f] = function() {
+                    self.debug('adding to deferred queue: ' + f);
                     adaptorDeferredQueue.push([f, arguments]);
                 }
             });
@@ -958,6 +965,7 @@
                 var args = adaptorDeferredQueue.shift();
                 var method = args.shift();
                 if (self.adaptor[method]) {
+                    self.debug('replaying deferred: ' + method);
                     self.adaptor[method].apply(self, args);
                 } else {
                     self.debug('Unrecognised adaptor method: ' + method);
