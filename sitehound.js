@@ -478,6 +478,11 @@
             }
             self.thisPageTraits['Page Type'] = self.page;
 
+            // cleanify
+            if (self.userId === 'undefined') {
+                self.userId = undefined;
+            }
+
             // collect data related to the current session
             examineSession();
 
