@@ -776,6 +776,7 @@
                     //
                     // First, alias() for Segment - will be passed through to data warehouse etc
                     if (usingSegment()) {
+                        self.debug('analytics.alias(' + self.userId + ')');
                         self.adaptor.alias(self.userId,
                             undefined,
                             {integrations: {'Mixpanel': false}}
@@ -804,6 +805,8 @@
                                 self.debug('Mixpanel: ALIAS_WAIT_TIMEOUT reached');
                                 resumeAdaptor();
                                 }, ALIAS_WAIT_TIMEOUT);
+                        } else {
+                            self.debug('mixpanel.distinct_id == sitehound.userId; no Mixpanel alias call');
                         }
                     }
                 } else {
@@ -840,6 +843,7 @@
                     // already been aliased, subsequent events would end up under the incorrect user ID.
                     // The fact we're doing this is why we need to delay all subsequent events until the callback
                     // for the prior alias call indicates it was received successfully.
+                    self.debug('Mixpanel: set distinct_id');
                     mixpanel.register({ distinct_id: self.userId });
                 }
                 if ((self.userId !== currentUserId) || getCookie('logged_out')) {
