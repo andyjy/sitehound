@@ -102,6 +102,12 @@
                 domainsIgnoreIPAddress: true,
                 domainsIgnoreSubdomains: ['staging', 'test'],
 
+                // disable tracking from particular IP addresses
+                // supports * wildcard and prefix match e.g. 'w.*.y.' matches 'w.x.y.z'
+                ignoreIPs: [],
+                // add traits for visitors from particular IP addresses
+                addTraitsForIPs: [], // [{ip:'w.x.y.z', traits:{a:'b', ..}}, ..]
+
                 // if we have any landing pages without this tracking installed, list them here
                 // in order to track them as the "true" landing page when the user clicks through to
                 // a page with tracking
@@ -172,7 +178,7 @@
 
             if (self.clientContext.dnt) {
                 self.info('Do-not-track cookie present - disabling.');
-                self.adaptor = 'disabled';
+                self.disable();
             }
 
             // replace the global sitehound var with our instance
@@ -201,11 +207,21 @@
                 // check we want to track this host
                 if (ignoreHost(location.hostname)) {
                     self.info('Ignoring host: ' + location.hostname);
-                    self.adaptor = 'disabled';
+                    self.disable();
                 }
                 if (self.clientContext.dnt) {
                     self.info('Do-not-track cookie present - disabling.');
-                    self.adaptor = 'disabled';
+                    self.disble();
+                }
+
+                if (self.ignoreIPs || self.addTraitsForIPs) {
+                    // if not yet known, will lookup asynchronously in time for the next pageview
+                    getClientIP();
+                    if (ignoreIP()) {
+                        self.info('Ignoring IP: ' + self.clientContext.ip + '; matched pattern: ' + (self.ignoreIPs.join ? self.ignoreIPs.join(',') : self.ignoreIPs));
+                        self.disable();
+                    }
+                    addTraitsForIP();
                 }
 
                 var firstSniff = !self.sniffed;
@@ -397,6 +413,60 @@
             }
             // else
             return false;
+        }
+
+        function getClientIP() {
+            // refresh client IP every 30 minutes
+            if (!self.clientContext.ip
+                || !self.clientContext.ipLookupTime
+                || ((new Date().getTime() - self.clientContext.ipLookupTime) > 1800000)) {
+                // make call to ipify.com to get the client IP address
+                self.debug('looking up ip');
+                var jsonpCallbackHash = Math.random().toString(36).substring(2,12);
+                self['setIP_' + jsonpCallbackHash] = function(ip) {
+                    self.debug('received IP: ', ip);
+                    if (!ip || !ip.ip) { return; }
+                    setLocalContext('ip', ip.ip);
+                    setLocalContext('ipLookupTime', new Date().getTime());
+                };
+                var script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.async = true;
+                script.src = 'https://api.ipify.org?format=jsonp&callback=sitehound.setIP_' + jsonpCallbackHash;
+                var first = document.getElementsByTagName('script')[0];
+                first.parentNode.insertBefore(script, first);
+            }
+            return self.clientContext.ip;
+        }
+
+        function ignoreIP() {
+            if (!self.clientContext.ip || !self.ignoreIPs || !self.ignoreIPs.length) {
+                return;
+            }
+            console.log(getIPRegExp(self.ignoreIPs));
+            return getIPRegExp(self.ignoreIPs).test(self.clientContext.ip);
+        }
+
+        function addTraitsForIP() {
+            if (!self.addTraitsForIPs || !self.addTraitsForIPs.map) { return; }
+            self.addTraitsForIPs.map(function(rule) {
+                if (rule && rule.ip && rule.traits) {
+                    if (getIPRegExp(rule.ip).test(self.clientContext.ip)) {
+                        self.debug('Matched IP rule: ' + rule.ip, rule.traits);
+                        self.globalTraits = mergeObjects(self.globalTraits, rule.traits);
+                    }
+                } else {
+                    console.debug('Invalid addTraitsForIP rule', rule);
+                }
+            });
+        }
+
+        function getIPRegExp(ip) {
+            if (ip && ip.map) {
+                return new RegExp('^(' + ip.map(function(i) { return getIPRegExp(i).toString().replace(/[\/\^\$]/g, ''); })
+                    .join('|') + ')$');
+            }
+            return new RegExp('^' + ip.replace(/\./g, '\\.').replace(/\.$/, '.*').replace('*', '.+') + '$');
         }
 
         function doSniff() {
@@ -991,6 +1061,9 @@
         }
 
         function setLocalContext(name, value, session_only) {
+            if (value === false) {
+                value = '';
+            }
             if (session_only) {
                 self.clientSessionContext[name] = value;
             } else {
@@ -1372,7 +1445,7 @@
 
     function getAdaptor(adaptor) {
         var adaptorClass, result;
-        if (typeof adaptor === 'object') {
+        if (typeof adaptor === 'object' && adaptor !== null) {
             result = adaptor;
         } else {
             // initialize adaptor for the analytics library we want to use
