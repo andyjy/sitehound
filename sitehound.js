@@ -919,7 +919,7 @@
                 if ((self.userId !== currentUserId) || self.clientSessionContext.loggedOut) {
                     self.debug('userId != currentUserId - Login');
                     self.track('Login');
-                    setLocalContext('loggedOut', '');
+                    setLocalContext('loggedOut', '', true);
                 }
             } else {
                 // no information about whether the user is currently logged in
@@ -937,7 +937,7 @@
                         // it's our first pageview this session - therefore we were logged in and then out in prior session(s)
                         // - set logged_out session cookie to prevent tracking a false logout event at the start of this session
                         self.debug('not logged in, but user ID from prior session - setting logged_out cookie');
-                        setLocalContext('logged_out', true, true);
+                        setLocalContext('loggedOut', true, true);
                     }
                 }
                 // by default, automatically detect logout if the userId property has been set
