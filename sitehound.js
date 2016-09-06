@@ -502,11 +502,11 @@
             // Fullstory.com session URL
             if (window.FS && window.FS.getCurrentSessionURL) {
                 // ideally do it instantly so we don't trigger a separate identify() call
-                self.globalTraits['Fullstory URL'] = FS.getCurrentSessionURL();
+                self.globalTraits['Fullstory URL'] = FS.getCurrentSessionURL() || '';
             } else if (!self.sniffed) {
                 var _old_fs_ready = window._fs_ready;
                 window._fs_ready = function() {
-                    self.adaptor.identify({'Fullstory URL': FS.getCurrentSessionURL()});
+                    self.adaptor.identify({'Fullstory URL': FS.getCurrentSessionURL() || ''});
                     if (typeof _old_fs_ready === 'function') {
                         _old_fs_ready();
                     }
@@ -644,7 +644,7 @@
                 'Initial Referring Domain'
             ];
             for (var i = 0; i < paramNames.length; i++) {
-                attributionParams[paramNames[i]] = null;
+                attributionParams[paramNames[i]] = '';
             }
 
             // utm params
@@ -686,7 +686,7 @@
             } else {
                 self.trackLandingPage = true;
                 attributionParams['Landing Page'] = location.pathname;
-                attributionParams['Initial Referrer'] = document.referrer ? document.referrer : null;
+                attributionParams['Initial Referrer'] = document.referrer ? document.referrer : '';
                 attributionParams['Initial Referring Domain'] = referrerHost;
             }
 
