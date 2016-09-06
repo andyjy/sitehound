@@ -1398,7 +1398,7 @@
         }
         traits['SiteHound library version'] = this.VERSION;
         this.adaptor.track('Tracking Error', traits);
-        error(e.name + '; ' + e.message);
+        error(e.name + '; ' + e.message + (e.stack ? '\n' + e.stack : ''));
     }
 
     //
@@ -1411,11 +1411,11 @@
     }
 
     function usingMixpanel() {
-        return mixpanel && (!usingSegment() || analytics.Integrations.Mixpanel);
+        return window.mixpanel && (!usingSegment() || analytics.Integrations.Mixpanel);
     }
 
     function usingAmplitude() {
-        return amplitude && usingSegment() && analytics.Integrations.Amplitude;
+        return window.amplitude && usingSegment() && analytics.Integrations.Amplitude;
     }
 
     function titleCase(str) {
