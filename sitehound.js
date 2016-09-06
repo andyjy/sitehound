@@ -1414,11 +1414,16 @@
     }
 
     SiteHound.prototype.trackError = function(e) {
-        this.adaptor.track('Tracking Error', {
-            name: typeof e === 'object' ? e.name : '',
-            message: typeof e === 'object' ? e.message : e,
-            'SiteHound library version': this.VERSION
-        });
+        var traits = {};
+        if (typeof e === 'object') {
+            traits.name = e.name || '';
+            traits.message = e.message || '';
+            if (e.stack) { traits.stackTrace = e.stack; }
+        } else {
+            traits.message = e;
+        }
+        traits['SiteHound library version'] = this.VERSION;
+        this.adaptor.track('Tracking Error', traits);
         error(e.name + '; ' + e.message);
     }
 
