@@ -106,7 +106,8 @@
                 // supports * wildcard and prefix match e.g. 'w.*.y.' matches 'w.x.y.z'
                 ignoreIPs: [],
                 // add traits for visitors from particular IP addresses
-                addTraitsForIPs: [], // [{ip:'w.x.y.z', traits:{a:'b', ..}}, ..]
+                // accepts array of objects with two keys: ip (string or array, wildcard + prefix matches as above), and traits (object)
+                addTraitsForIPs: [], // [{ip: 'w.x.y.z', traits: {a:'b', ..}}, {ip: ['w.x.y.z', ..], traits: {..}}, ..]
 
                 // if we have any landing pages without this tracking installed, list them here
                 // in order to track them as the "true" landing page when the user clicks through to
