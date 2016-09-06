@@ -294,7 +294,7 @@
         this.identifyOnce = function(params) {
             if (self.deferUntilSniff('identifyOnce', arguments)) {return;}
             self.debug('identifyOnce', params);
-            self.adaptor.identify(ignoreExistingTraits(params));
+            self.adaptor.identifyOnce(params);
         }
 
         this.detectPage = function(path) {
@@ -1147,35 +1147,12 @@
         }
 
         function ignoreExistingTraits(params) {
-            var traits = self.adaptor.userTraits(),
-                newParams = {};
-            if (typeof traits === 'undefined') {
-                // current traits undefined - all params are new
-                return params;
-            }
-            for (var key in params) {
-                if (!(key in traits)) {
-                    newParams[key] = params[key];
-                }
-            }
-            return newParams;
+            return excludeTraits(self.adaptor.userTraits(), params);
         }
 
         function setAdaptor(adaptor) {
             self.adaptor = adaptor;
             CONSOLE_PREFIX = '[SiteHound' + (adaptor && adaptor.klass ? ':' + adaptor.klass : '') + '] ';
-        }
-
-        function usingSegment() {
-            return self.adaptor.klass == 'segment';
-        }
-
-        function usingMixpanel() {
-            return window.mixpanel && (!usingSegment() || window.analytics.Integrations.Mixpanel);
-        }
-
-        function usingAmplitude() {
-            return window.amplitude && usingSegment() && window.analytics.Integrations.Amplitude;
         }
 
         // Modified from https://github.com/segmentio/top-domain v2.0.1
@@ -1431,6 +1408,19 @@
     // utility methods
     //
 
+    function usingSegment() {
+        var adaptor = window.sitehound.adaptor;
+        return adaptor && (adaptor === 'segment' || adaptor.klass == 'segment');
+    }
+
+    function usingMixpanel() {
+        return mixpanel && (!usingSegment() || analytics.Integrations.Mixpanel);
+    }
+
+    function usingAmplitude() {
+        return amplitude && usingSegment() && analytics.Integrations.Amplitude;
+    }
+
     function titleCase(str) {
         return typeof str === 'string'
             ? str.replace(/\w\S*/g, function(txt) { return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase(); })
@@ -1442,6 +1432,20 @@
         for (var attrname in obj1) { obj3[attrname] = obj1[attrname]; }
         for (var attrname in obj2) { obj3[attrname] = obj2[attrname]; }
         return obj3;
+    }
+
+    function excludeTraits(traits_to_exclude, traits) {
+        if (typeof traits_to_exclude === 'undefined') {
+            // current traits undefined - all traits are new
+            return traits;
+        }
+        var new_traits = {};
+        for (var key in traits) {
+            if (!(key in traits_to_exclude)) {
+                new_traits[key] = traits[key];
+            }
+        }
+        return new_traits;
     }
 
     function escapeRegExp(str) {
@@ -1569,8 +1573,8 @@
             f();
         }
         // tracking disabled
-        this.identify = this.track = this.trackLink = this.trackForm
-            = this.page = this.alias = this.userId = function() {}
+        this.identify = this.identifyOnce = this.track = this.trackLink = this.trackForm
+            = this.page = this.alias = this.userId = function() {};
         this.userTraits = function() { return {}; }
     });
 
@@ -1581,42 +1585,67 @@
             waitFor('analytics.ready', function() {
                 analytics.ready(f);
             });
-        }
+        };
 
         this.identify = function(a, b, c) {
             analytics.identify(a, b, c);
-        }
+        };
+
+        this.identifyOnce = function(traits) {
+            // first, exclude current global traits from analytics.js client-side persistence
+            traits = excludeTraits(self.userTraits(), traits);
+            // sent to Segment and integrations without specific setOnce support
+            self.identify(traits, {
+                integrations: {
+                    Mixpanel: false,
+                    Amplitude: false
+                }
+            });
+            // sent to integrations with setOnce support
+            if (usingMixpanel()) {
+                mixpanel.people.set_once(traits);
+            }
+            if (usingAmplitude()) {
+                var identify = new amplitude.Identify();
+                for (var key in traits) {
+                    if (traits.hasOwnProperty(key)) {
+                        identify.setOnce(key, traits[key]);
+                    }
+                }
+                amplitude.getInstance().identify(identify);
+            }
+        };
 
         this.track = function(event, traits) {
             analytics.track(event, traits);
-        }
+        };
 
         this.trackLink = function(elements, event, traits) {
             analytics.trackLink(elements, event, traits);
-        }
+        };
 
         this.trackForm = function(elements, event, traits) {
             analytics.trackForm(elements, event, traits);
-        }
+        };
 
         this.page = function(a, b, c) {
             analytics.page(a, b, c);
-        }
+        };
 
         this.alias = function(to, from, options) {
             analytics.alias(to, from, options);
-        }
+        };
 
         this.userId = function() {
             var user = analytics.user();
             return user ? user.id() : undefined;
-        }
+        };
 
         this.userTraits = function() {
             var user = analytics.user();
             var traits = user.traits();
             return traits || {};
-        }
+        };
     });
 
     // let's go
