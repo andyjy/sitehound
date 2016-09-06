@@ -725,7 +725,7 @@
             if (sessionCount == 1) {
                 // only track first touch params on first session
                 self.debug('..setting first touch params');
-                self.globalTraits = mergeObjects(self.globalTraits, ignoreExistingTraits(attributionParamsFirst));
+                self.globalTraits = mergeObjects(self.globalTraits, attributionParamsFirst);
             }
             self.debug('..setting last touch params');
             self.globalTraits = mergeObjects(self.globalTraits, attributionParamsLast);
@@ -1145,10 +1145,6 @@
             } else {
                 return decodeURIComponent(results[1]).replace(/\+/g, ' ');
             }
-        }
-
-        function ignoreExistingTraits(params) {
-            return excludeTraits(self.adaptor.userTraits(), params);
         }
 
         function setAdaptor(adaptor) {
