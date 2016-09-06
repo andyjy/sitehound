@@ -722,7 +722,7 @@
 
             self.debug('Attribution params:');
             self.debug(attributionParams);
-            if (sessionCount == 1) {
+            if ((sessionCount == 1) && (self.thisPageTraits['Pageviews This Session'] == 1)) {
                 // only track first touch params on first session
                 self.debug('..setting first touch params');
                 self.globalTraits = mergeObjects(self.globalTraits, attributionParamsFirst);
@@ -932,7 +932,7 @@
                         self.debug('Mixpanel: register({distinct_id: ' + self.adaptor.userId() + '})')
                         mixpanel.register({ distinct_id: self.adaptor.userId() });
                     }
-                    if (self.thisPageTraits['Pageviews This Session'] == 0) {
+                    if (self.thisPageTraits['Pageviews This Session'] == 1) {
                         // not told we're logged in, but we have a user ID from the analytics persistence, and
                         // it's our first pageview this session - therefore we were logged in and then out in prior session(s)
                         // - set logged_out session cookie to prevent tracking a false logout event at the start of this session
