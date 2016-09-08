@@ -31,7 +31,7 @@
 !function() {
     var VERSION = "0.9.72",
         CONSOLE_PREFIX = '[SiteHound] ',
-        ALIAS_WAIT_TIMEOUT = 300; // milliseconds
+        ALIAS_WAIT_TIMEOUT = 600; // milliseconds
 
     // where we store registered adaptors for different platforms
     var adaptors = {};
