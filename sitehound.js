@@ -9,7 +9,7 @@
 //  Source: https://github.com/andyyoung/sitehound
 //
 //  @author        Andy Young // @andyy // andy@apexa.co.uk
-//  @version       0.9.72 - 6th Sep 2016
+//  @version       0.9.73 - 14th Sep 2016
 //  @licence       GNU GPL v3
 //
 //  Copyright (C) 2016 Andy Young // andy@apexa.co.uk
@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.72",
+    var VERSION = "0.9.73",
         CONSOLE_PREFIX = '[SiteHound] ',
         ALIAS_WAIT_TIMEOUT = 600; // milliseconds
 
