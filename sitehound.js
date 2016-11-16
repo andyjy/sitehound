@@ -1268,7 +1268,7 @@
                     // found key
                     key = sanitize(traits[key]);
                     // pair with event name
-                    function sanitize(s) {
+                    var sanitize = function(s) {
                         return s.replace(';', '_').replace(':', '_');
                     }
                     var thisEventKey = sanitize(event) + ':' + sanitize(key);
