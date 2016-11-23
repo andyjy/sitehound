@@ -29,7 +29,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 !function() {
-    var VERSION = "0.9.74",
+    var VERSION = "0.9.75",
         CONSOLE_PREFIX = '[SiteHound] ',
         ALIAS_WAIT_TIMEOUT = 600; // milliseconds
 
@@ -69,6 +69,10 @@
         // store for deferred adaptor functions
         var adaptorDeferredFunctions,
             adaptorDeferredQueue = [];
+
+        // maintain list of Optimizely Experiment IDs we've detected
+        var optimizelyActiveExperimentsDetected = [],
+            optimizelyIntervalId;
 
         if (initialConfig.adaptor && ((initialConfig.adaptor.klass || initialConfig.adaptor) !== adaptor.klass)) {
             // adaptor has been changed since initial load
@@ -555,8 +559,13 @@
             }
 
             // track Optimizely experiment views after we've handled user identification and page tracking
-            for (var i = 0; i < optimizelyEvents.length; i++) {
-                self.track(optimizelyEvents[i][0], optimizelyEvents[i][1]);
+            trackOptimizelyEvents(optimizelyEvents);
+            // poll for newly activted Optimizely experiments
+            if (!optimizelyIntervalId && window.optimizely && window.optimizely.data) {
+                optimizelyIntervalId = setInterval(
+                    function() { trackOptimizelyEvents(detectOptimizelyExperiments()); },
+                    300
+                );
             }
         }
 
@@ -761,6 +770,10 @@
                 return result;
             }
 
+            if (userTraits === undefined) {
+                userTraits = self.adaptor.userTraits();
+            }
+
             var oEsKey = 'Optimizely Experiments',
                 oVsKey = 'Optimizely Variations';
             var oEs = userTraits[oEsKey],
@@ -770,6 +783,11 @@
 
             for (var i = 0; i < activeExperiments.length; i++) {
                 var experimentId = activeExperiments[i];
+                if (optimizelyActiveExperimentsDetected.indexOf(experimentId) > -1) {
+                    // already tracked this active experiment
+                    continue;
+                }
+
                 var variationId = oState.variationIdsMap[experimentId][0].toString();
                 var experimentTraits = {
                     'Experiment ID': experimentId,
@@ -797,9 +815,17 @@
                 }
                 result.push(['Optimizely Experiment Viewed', experimentTraits]);
             }
-            self.globalTraits[oEsKey].sort();
-            self.globalTraits[oVsKey].sort();
+            if (result.length) {
+                self.globalTraits[oEsKey].sort();
+                self.globalTraits[oVsKey].sort();
+            }
             return result;
+        }
+
+        function trackOptimizelyEvents(events) {
+            for (var i = 0; i < events.length; i++) {
+                self.track(events[i][0], events[i][1]);
+            }
         }
 
         // handle user identification, including login/logout
