@@ -787,6 +787,7 @@
                     // already tracked this active experiment
                     continue;
                 }
+                optimizelyActiveExperimentsDetected.push(experimentId);
 
                 var variationId = oState.variationIdsMap[experimentId][0].toString();
                 var experimentTraits = {
