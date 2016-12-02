@@ -783,9 +783,13 @@
             }
 
             var oEsKey = 'Optimizely Experiments',
-                oVsKey = 'Optimizely Variations';
+                oVsKey = 'Optimizely Variations',
+                activeExperimentsKey = 'Optimizely Experiments Active',
+                activeVariantsKey = 'Optimizely Variations Active';
             var oEs = userTraits[oEsKey],
-                oVs = userTraits[oVsKey];
+                oVs = userTraits[oVsKey],
+                activeEs = self.thisPageTraits[activeExperimentsKey] = self.thisPageTraits[activeExperimentsKey] || [],
+                activeVs = self.thisPageTraits[activeVariantsKey] = self.thisPageTraits[activeVariantsKey] || [];
             self.globalTraits[oEsKey] = oEs ? (typeof oEs.sort === 'function' ? oEs : [oEs]) : [];
             self.globalTraits[oVsKey] = oVs ? (typeof oVs.sort === 'function' ? oVs : [oVs]) : [];
 
@@ -808,6 +812,9 @@
                 if (self.globalTraits[oEsKey].indexOf(experimentId) === -1) {
                     self.globalTraits[oEsKey].push(experimentId);
                 }
+                if (activeEs.indexOf(experimentId) === -1) {
+                    activeEs.push(experimentId);
+                }
                 var multiVariate = oSections[experimentId];
                 if (multiVariate) {
                     experimentTraits['Section Name'] = multiVariate.name;
@@ -816,10 +823,16 @@
                         if (self.globalTraits[oVsKey].indexOf(multiVariate.variation_ids[v]) === -1) {
                             self.globalTraits[oVsKey].push(multiVariate.variation_ids[v]);
                         }
+                        if (activeVs.indexOf(multiVariate.variation_ids[v]) === -1) {
+                            activeVs.push(multiVariate.variation_ids[v]);
+                        }
                     }
                 } else {
                     if (self.globalTraits[oVsKey].indexOf(variationId) === -1) {
                         self.globalTraits[oVsKey].push(variationId);
+                    }
+                    if (activeVs.indexOf(variationId) === -1) {
+                        activeVs.push(variationId);
                     }
                 }
                 result.push(['Optimizely Experiment Viewed', experimentTraits]);
@@ -827,6 +840,8 @@
             if (result.length) {
                 self.globalTraits[oEsKey].sort();
                 self.globalTraits[oVsKey].sort();
+                activeEs.sort();
+                activeVs.sort();
             }
             return result;
         }
