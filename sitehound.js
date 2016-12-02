@@ -361,6 +361,14 @@
         }
 
         this.debug = function(message, object) {
+            // alias debug() / debug(false) to debugMode(true/false)
+            if (object === undefined) {
+                if (message === undefined) {
+                    return self.debugMode();
+                } else if (message === false) {
+                    return self.debugMode(false);
+                }
+            }
             if (!self.clientContext.logToConsole) {
                 return;
             }
