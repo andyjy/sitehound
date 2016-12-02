@@ -23,6 +23,7 @@
             'identify',
             'identifyOnce',
             'info',
+            'newPage',
             'ready',
             'track',
             'trackAndCount',

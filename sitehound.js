@@ -1393,6 +1393,11 @@
         return result;
     }
 
+    SiteHound.prototype.newPage = function() {
+        this.page = undefined;
+        this.sniff();
+    }
+
     //
     // tracking for debugging our tracking ¯\_(ツ)_/¯
     //
